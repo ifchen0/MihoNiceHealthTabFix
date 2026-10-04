@@ -6,7 +6,7 @@
   <supportedVersions><li>1.6</li></supportedVersions>
   <description>Small patches for Nice Health Tab.
 
-Miho operations list (only when Miho is loaded): Miho enables Humanoid Alien Races' humanRecipeImport, which registers the race for every human surgery, and also lists the same surgeries in its own race def. Vanilla does not remove duplicates when combining the two, so every surgery appears twice for Miho. Nice Health Tab identifies each operation row by surgery and body part, so the duplicate rows fight over the same position and the list never slides into place. An XML patch removes the 23 redundant entries from Miho's own list; the surgeries stay available through the human surgery list. Other races are not touched.
+Miho operations list (only when Miho is loaded): Miho enables Humanoid Alien Races' humanRecipeImport, which registers the race for every human surgery, and also lists the same surgeries in its own race def. Vanilla does not remove duplicates when combining the two, so every surgery appears twice for Miho. Nice Health Tab identifies each operation row by surgery and body part, so the duplicate rows fight over the same position and the list never slides into place. Once at startup, the surgery list of Miho race defs is deduplicated, keeping the first entry so the order does not change. Only entries that really appear twice are removed, so this stays safe if Miho changes its list. Other races are not touched.
 
 Wooden prosthetic arm: Nice Health Tab draws the vanilla prosthetic arm, which is made of steel and components, with a wooden part image. That image is removed, so the arm is drawn like other artificial parts such as the bionic arm.
 
@@ -14,6 +14,7 @@ Button visibility: The inactive buttons around the body doll are drawn almost tr
 
 Notes:
 - Safe to add to or remove from an existing save. Nothing is saved.
+- Writes one line to the log for each Miho race def that had duplicates.
 - Requires Harmony and Nice Health Tab. Miho is optional; load after it if you use it.
 
 This mod was developed with the help of AI coding tools (Claude Code). Full source code is included in the Source folder for review.</description>

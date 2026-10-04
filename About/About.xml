@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ModMetaData>
+  <name>Miho - Nice Health Tab Fix</name>
+  <author>ifchen0</author>
+  <packageId>ifchen0.mihonicehealthtabfix</packageId>
+  <supportedVersions><li>1.6</li></supportedVersions>
+  <description>Fixes the operations list in Nice Health Tab not sliding into place when a Miho pawn is selected.
+
+Cause: Miho enables Humanoid Alien Races' humanRecipeImport, which registers the race for every human surgery, and also lists the same surgeries in its own race def. Vanilla does not remove duplicates when combining the two, so every surgery appears twice for Miho. Nice Health Tab identifies each operation row by surgery and body part, and the duplicate rows fight over the same position. The vanilla Add bill menu also shows every surgery twice.
+
+Fix: Once at startup, the surgery list of Miho race defs is deduplicated in place, keeping the first entry so the order does not change. Other races are not touched. No Harmony patches.
+
+Notes:
+- Safe to add to or remove from an existing save. Nothing is saved.
+- Writes one line to the log for each Miho race def that had duplicates.
+
+This mod was developed with the help of AI coding tools (Claude Code). Full source code is included in the Source folder for review.</description>
+  <modDependencies>
+    <li><packageId>miho.fortifiedoutremer</packageId><displayName>Miho, the celestial fox</displayName><steamWorkshopUrl>steam://url/CommunityFilePage/2816826107</steamWorkshopUrl></li>
+    <li><packageId>Andromeda.NiceHealthTab</packageId><displayName>Nice Health Tab</displayName><steamWorkshopUrl>steam://url/CommunityFilePage/3328729902</steamWorkshopUrl></li>
+  </modDependencies>
+  <loadAfter>
+    <li>miho.fortifiedoutremer</li>
+    <li>Andromeda.NiceHealthTab</li>
+  </loadAfter>
+</ModMetaData>

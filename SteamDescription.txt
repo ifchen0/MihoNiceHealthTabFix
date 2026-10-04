@@ -1,4 +1,4 @@
-Patches for [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3328729902]Nice Health Tab[/url]. The first patch is for [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2816826107]Miho[/url] pawns and only applies when Miho is loaded.
+Small patches for [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3328729902]Nice Health Tab[/url] and [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2816826107]Miho[/url]. The Miho patches only apply when Miho is loaded.
 
 [h2]Miho: operations list never settles[/h2][b]Cause:[/b] In RimWorld 1.6 the human surgeries (bionic parts, prosthetics, organ transplants and so on) are given to humans through their [i]recipeUsers[/i] list. Miho turns on Humanoid Alien Races' [i]humanRecipeImport[/i], which adds Miho to those lists, and the Miho race def also lists the same surgeries in its own [i]recipes[/i]. Vanilla [i]ThingDef.AllRecipes[/i] joins both sources without removing duplicates, so every one of these surgeries appears twice for Miho. In my game that was 23 duplicate surgeries.
 
@@ -17,6 +17,10 @@ Nice Health Tab identifies each row of its animated operations list by surgery a
 [h2]Miho: missile turret error on load[/h2][b]Cause:[/b] Miho's missile turret gun ([i]Miho_BuildingWeapon_Missile[/i]) lists [i]CompEquippable[/i] in its comps, but its parent [i]BaseWeapon[/i] already provides it, so the gun ends up with two. Both save the same verb, and loading a save logs [i]Exception registering Verse.Verb_Shoot ... An item with the same key has already been added[/i] once per missile turret.
 
 [b]Fix:[/b] An XML patch removes the extra copy; the inherited one stays. Existing saves load fine and are cleaned up the next time they are saved.
+
+[h2]Long range turret warning[/h2][b]Cause:[/b] Enemy AI marks the area around player turrets to avoid, using the turret range plus 4 cells. For turrets with very long range, such as Miho's missile turret (range 200), that is beyond the largest circle the game has precomputed (radius about 80), so the log shows [i]Not enough squares to get to radius 204. Max is 79.81228[/i] for each such turret whenever the area is rebuilt (for example on every load).
+
+[b]Fix:[/b] Vanilla already falls back to the largest circle in that case; the same value is now returned without logging the error. Behavior is unchanged. Works for any long range turret, not just Miho's.
 
 [h2]Notes[/h2][list]
 [*]Safe to add to or remove from an existing save. Nothing is saved.

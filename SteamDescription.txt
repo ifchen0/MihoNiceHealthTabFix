@@ -14,6 +14,10 @@ Nice Health Tab identifies each row of its animated operations list by surgery a
 
 [b]Fix:[/b] They are always drawn with their hover color. Active buttons are unchanged.
 
+[h2]Miho: missile turret error on load[/h2][b]Cause:[/b] Miho's missile turret gun ([i]Miho_BuildingWeapon_Missile[/i]) lists [i]CompEquippable[/i] in its comps, but its parent [i]BaseWeapon[/i] already provides it, so the gun ends up with two. Both save the same verb, and loading a save logs [i]Exception registering Verse.Verb_Shoot ... An item with the same key has already been added[/i] once per missile turret.
+
+[b]Fix:[/b] An XML patch removes the extra copy; the inherited one stays. Existing saves load fine and are cleaned up the next time they are saved.
+
 [h2]Notes[/h2][list]
 [*]Safe to add to or remove from an existing save. Nothing is saved.
 [*]Writes one line to the log for each Miho race def that had duplicates, e.g. [i][NiceHealthTabPatch] Removed 23 duplicate recipes from Alien_Miho.[/i]

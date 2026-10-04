@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Patch>
+  <!-- Miho's missile turret gun lists CompEquippable again although BaseWeapon already provides it. The two comps save
+       the same verbTracker twice, and loading registers its verb load ID twice ("An item with the same key has already been added").
+       Patches run before inheritance, so removing the child's copy keeps the inherited one. -->
+  <Operation Class="PatchOperationRemove" MayRequire="miho.fortifiedoutremer">
+    <xpath>Defs/ThingDef[defName="Miho_BuildingWeapon_Missile"]/comps/li[compClass="CompEquippable"]</xpath>
+    <success>Always</success>
+  </Operation>
+</Patch>

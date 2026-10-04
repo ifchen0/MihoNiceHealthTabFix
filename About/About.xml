@@ -12,6 +12,8 @@ Wooden prosthetic arm: Nice Health Tab draws the vanilla prosthetic arm, which i
 
 Button visibility: The inactive buttons around the body doll are drawn almost transparent until the mouse is over them, which is hard to see on the dark background. They are now always drawn with their hover color. Active buttons are unchanged.
 
+Miho missile turret (only when Miho is loaded): The missile turret gun lists the equippable comp again although the base weapon def already provides it. The two copies save the same verb twice, and loading a save logs "Exception registering Verse.Verb_Shoot ... An item with the same key has already been added" once per missile turret. An XML patch removes the extra copy.
+
 Notes:
 - Safe to add to or remove from an existing save. Nothing is saved.
 - Writes one line to the log for each Miho race def that had duplicates.

@@ -1,15 +1,22 @@
-Fixes the operations list in [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3328729902]Nice Health Tab[/url] not sliding into place when a [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2816826107]Miho[/url] pawn is selected.
+Patches for [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3328729902]Nice Health Tab[/url]. The first patch is for [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2816826107]Miho[/url] pawns and only applies when Miho is loaded.
 
-[h2]Every surgery listed twice[/h2][b]Cause:[/b] In RimWorld 1.6 the human surgeries (bionic parts, prosthetics, organ transplants and so on) are given to humans through their [i]recipeUsers[/i] list. Miho turns on Humanoid Alien Races' [i]humanRecipeImport[/i], which adds Miho to those lists, and the Miho race def also lists the same surgeries in its own [i]recipes[/i]. Vanilla [i]ThingDef.AllRecipes[/i] joins both sources without removing duplicates, so every one of these surgeries appears twice for Miho. In my game that was 23 duplicate surgeries.
+[h2]Miho: operations list never settles[/h2][b]Cause:[/b] In RimWorld 1.6 the human surgeries (bionic parts, prosthetics, organ transplants and so on) are given to humans through their [i]recipeUsers[/i] list. Miho turns on Humanoid Alien Races' [i]humanRecipeImport[/i], which adds Miho to those lists, and the Miho race def also lists the same surgeries in its own [i]recipes[/i]. Vanilla [i]ThingDef.AllRecipes[/i] joins both sources without removing duplicates, so every one of these surgeries appears twice for Miho. In my game that was 23 duplicate surgeries.
 
-Nice Health Tab identifies each row of its animated operations list by surgery and body part. Two rows with the same identity end up sharing one slot that is pulled toward two positions at once, so the list never settles. The vanilla Add bill menu also shows these surgeries twice.
+Nice Health Tab identifies each row of its animated operations list by surgery and body part. Two rows with the same identity end up sharing one slot that is pulled toward two positions at once, so the list never slides into place. The vanilla Add bill menu also shows these surgeries twice.
 
-[b]Fix:[/b] Once at startup, the surgery list of every Miho race def is deduplicated in place, keeping the first entry so the order does not change. Other races are not touched. No Harmony patches.
+[b]Fix:[/b] An XML patch removes the 23 redundant entries from Miho's own [i]recipes[/i]. The surgeries stay available through [i]recipeUsers[/i], so nothing is lost. Other races are not touched.
+
+[h2]Prosthetic arm drawn as wood[/h2][b]Cause:[/b] Nice Health Tab maps the vanilla [i]SimpleProstheticArm[/i] to its [i]WoodenPart[/i] image, but that arm is made of steel and components. The actual wooden part in vanilla is the wooden hand.
+
+[b]Fix:[/b] An XML patch removes those image overrides, so the arm is drawn like other artificial parts such as the bionic arm.
+
+[h2]Buttons hard to see[/h2][b]Cause:[/b] The inactive buttons around the body doll are drawn at 25% opacity until the mouse is over them, which is hard to see on the dark background.
+
+[b]Fix:[/b] They are always drawn with their hover color. Active buttons are unchanged.
 
 [h2]Notes[/h2][list]
 [*]Safe to add to or remove from an existing save. Nothing is saved.
-[*]Writes one line to the log for each Miho race def that had duplicates, e.g. [i][MihoNiceHealthTabFix] Removed 23 duplicate recipes from Alien_Miho.[/i]
-[*]Load after Miho and Nice Health Tab.
+[*]Requires Harmony and Nice Health Tab. Miho is optional; load after it if you use it.
 [/list]
 [hr][/hr]
 This mod was developed with the help of AI coding tools (Claude Code). Full source code is included in the Source folder for review.

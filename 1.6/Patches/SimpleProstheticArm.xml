@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Patch>
+  <!-- Nice Health Tab draws the vanilla prosthetic arm (steel and components) with its wooden part image.
+       Without these overrides it falls back to the regular arm tinted as an artificial part, like the bionic arm. -->
+  <Operation Class="PatchOperationRemove">
+    <xpath>Defs/NiceHealthTab.DollPartProsthesis[prosthesisDefName="SimpleProstheticArm"]</xpath>
+  </Operation>
+</Patch>

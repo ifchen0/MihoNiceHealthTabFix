@@ -3,6 +3,7 @@
   <name>Nice Health Tab Patch</name>
   <author>ifchen0</author>
   <packageId>ifchen0.nicehealthtabpatch</packageId>
+  <url>https://github.com/ifchen0/MihoNiceHealthTabFix</url>
   <supportedVersions><li>1.6</li></supportedVersions>
   <description>Small patches for Nice Health Tab and Miho.
 

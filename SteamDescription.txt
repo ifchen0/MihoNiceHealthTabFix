@@ -14,6 +14,10 @@ Nice Health Tab identifies each row of its animated operations list by surgery a
 
 [b]Fix:[/b] They are always drawn with their hover color. Active buttons are unchanged.
 
+[h2]Missing ears, jaw and limb bones not shown on the doll[/h2][b]Cause:[/b] The body doll only colors parts that have their own image. A missing ear, jaw, tongue, humerus, radius, femur or tibia has none, so the head, arm or leg still looks intact and the loss only shows in the list next to the doll.
+
+[b]Fix:[/b] A white cross is drawn beside the head, arm or leg when one of these parts is missing. The part keeps its injury or prosthesis color. Hovering the cross or the part lists the missing parts, and clicking the cross opens their surgery menu. No surgery targets a limb bone, so for those the menu of the leg or shoulder opens instead.
+
 [h2]Miho: missile turret error on load[/h2][b]Cause:[/b] Miho's missile turret gun ([i]Miho_BuildingWeapon_Missile[/i]) lists [i]CompEquippable[/i] in its comps, but its parent [i]BaseWeapon[/i] already provides it, so the gun ends up with two. Both save the same verb, and loading a save logs [i]Exception registering Verse.Verb_Shoot ... An item with the same key has already been added[/i] once per missile turret.
 
 [b]Fix:[/b] An XML patch removes the extra copy; the inherited one stays. Existing saves load fine and are cleaned up the next time they are saved.

@@ -18,6 +18,10 @@ Nice Health Tab identifies each row of its animated operations list by surgery a
 
 [b]Fix:[/b] A white cross is drawn beside the head, arm or leg when one of these parts is missing. The part keeps its injury or prosthesis color. Hovering the cross or the part lists the missing parts, and clicking the cross opens their surgery menu. No surgery targets a limb bone, so for those the menu of the leg or shoulder opens instead.
 
+[h2]Badly hurt parts shown as missing[/h2][b]Cause:[/b] Nice Health Tab computes part health with its own copy of the vanilla calculation, so mods that change part health are ignored. With [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2260055393]Just A Flesh Wound[/url], a part that takes lethal damage is kept at 1 HP and can still heal, and the vanilla health tab shows it that way, but Nice Health Tab still sees 0 and draws the part as missing (not drawn at all) on the doll.
+
+[b]Fix:[/b] When Nice Health Tab gets 0 health for a part that has not actually been removed, the game's own part health is used instead, so the part is drawn as seriously damaged. Parts that really are missing are unchanged. Without such a mod the result is the same as before.
+
 [h2]Miho: missile turret error on load[/h2][b]Cause:[/b] Miho's missile turret gun ([i]Miho_BuildingWeapon_Missile[/i]) lists [i]CompEquippable[/i] in its comps, but its parent [i]BaseWeapon[/i] already provides it, so the gun ends up with two. Both save the same verb, and loading a save logs [i]Exception registering Verse.Verb_Shoot ... An item with the same key has already been added[/i] once per missile turret.
 
 [b]Fix:[/b] An XML patch removes the extra copy; the inherited one stays. Existing saves load fine and are cleaned up the next time they are saved.

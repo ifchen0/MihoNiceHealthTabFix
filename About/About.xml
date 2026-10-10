@@ -13,6 +13,8 @@ Wooden prosthetic arm: Nice Health Tab draws the vanilla prosthetic arm, which i
 
 Button visibility: The inactive buttons around the body doll are drawn almost transparent until the mouse is over them, which is hard to see on the dark background. They are now always drawn with their hover color. Active buttons are unchanged.
 
+Badly hurt parts shown as missing: Nice Health Tab computes part health with its own copy of the vanilla calculation, so mods that change part health are ignored. With Just A Flesh Wound, a part that takes lethal damage is kept at 1 HP and can still heal, but Nice Health Tab still sees 0 and does not draw the part on the doll. When Nice Health Tab gets 0 health for a part that has not actually been removed, the game's own part health is now used instead. Parts that really are missing are unchanged.
+
 Miho missile turret (only when Miho is loaded): The missile turret gun lists the equippable comp again although the base weapon def already provides it. The two copies save the same verb twice, and loading a save logs "Exception registering Verse.Verb_Shoot ... An item with the same key has already been added" once per missile turret. An XML patch removes the extra copy.
 
 Long range turret warning (any mod): Enemy AI marks the area around player turrets to avoid, using the turret range plus 4. For turrets with very long range, such as Miho's missile turret (range 200), that is beyond the largest circle the game has precomputed (radius about 80), so it logs "Not enough squares to get to radius 204" for each such turret whenever the area is rebuilt. Vanilla then uses the largest circle anyway; the same result is now returned without the error.

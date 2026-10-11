@@ -5,30 +5,33 @@
   <packageId>ifchen0.nicehealthtabpatch</packageId>
   <url>https://github.com/ifchen0/MihoNiceHealthTabFix</url>
   <supportedVersions><li>1.6</li></supportedVersions>
-  <description>Small patches for Nice Health Tab and Miho.
+  <description>Small patches for Nice Health Tab and Miho. Both are optional: the Nice Health Tab patches only load when Nice Health Tab is active, and the Miho patches only apply when Miho is loaded.
 
 Miho operations list (only when Miho is loaded): Miho enables Humanoid Alien Races' humanRecipeImport, which registers the race for every human surgery, and also lists the same surgeries in its own race def. Vanilla does not remove duplicates when combining the two, so every surgery appears twice for Miho. Nice Health Tab identifies each operation row by surgery and body part, so the duplicate rows fight over the same position and the list never slides into place. Once at startup, the surgery list of Miho race defs is deduplicated, keeping the first entry so the order does not change. Only entries that really appear twice are removed, so this stays safe if Miho changes its list. Other races are not touched.
 
-Wooden prosthetic arm: Nice Health Tab draws the vanilla prosthetic arm, which is made of steel and components, with a wooden part image. That image is removed, so the arm is drawn like other artificial parts such as the bionic arm.
+Wooden prosthetic arm (only when Nice Health Tab is loaded): Nice Health Tab draws the vanilla prosthetic arm, which is made of steel and components, with a wooden part image. That image is removed, so the arm is drawn like other artificial parts such as the bionic arm.
 
-Button visibility: The inactive buttons around the body doll are drawn almost transparent until the mouse is over them, which is hard to see on the dark background. They are now always drawn with their hover color. Active buttons are unchanged.
+Button visibility (only when Nice Health Tab is loaded): The inactive buttons around the body doll are drawn almost transparent until the mouse is over them, which is hard to see on the dark background. They are now always drawn with their hover color. Active buttons are unchanged.
 
-Badly hurt parts shown as missing: Nice Health Tab computes part health with its own copy of the vanilla calculation, so mods that change part health are ignored. With Just A Flesh Wound, a part that takes lethal damage is kept at 1 HP and can still heal, but Nice Health Tab still sees 0 and does not draw the part on the doll. When Nice Health Tab gets 0 health for a part that has not actually been removed, the game's own part health is now used instead. Parts that really are missing are unchanged.
+Badly hurt parts shown as missing (only when Nice Health Tab is loaded): Nice Health Tab computes part health with its own copy of the vanilla calculation, so mods that change part health are ignored. With Just A Flesh Wound, a part that takes lethal damage is kept at 1 HP and can still heal, but Nice Health Tab still sees 0 and does not draw the part on the doll. When Nice Health Tab gets 0 health for a part that has not actually been removed, the game's own part health is now used instead. Parts that really are missing are unchanged.
 
 Miho missile turret (only when Miho is loaded): The missile turret gun lists the equippable comp again although the base weapon def already provides it. The two copies save the same verb twice, and loading a save logs "Exception registering Verse.Verb_Shoot ... An item with the same key has already been added" once per missile turret. An XML patch removes the extra copy.
 
 Long range turret warning (any mod): Enemy AI marks the area around player turrets to avoid, using the turret range plus 4. For turrets with very long range, such as Miho's missile turret (range 200), that is beyond the largest circle the game has precomputed (radius about 80), so it logs "Not enough squares to get to radius 204" for each such turret whenever the area is rebuilt. Vanilla then uses the largest circle anyway; the same result is now returned without the error.
 
+Miho permit choice (only when Miho is loaded): The top patron title awards one permit point, but Miho defines no permits, so the pawn shows "Permit choice ready" and a "Choose permit" button forever while the permit list stays empty. An XML patch sets that title's permit points to 0, only while no permit belongs to the Miho faction.
+
+Spending favor at favor traders (any mod): Vanilla always shows 0 favor on the colony side when a trader uses royal favor as currency, such as Miho's relic curators, so nothing they stock can be bought. The colony side now shows the negotiator's favor with the trader's faction, and purchases remove the cost from it. Buy prices in favor are rounded up to whole points. Choose the pawn holding the favor as the negotiator.
+
 Notes:
 - Safe to add to or remove from an existing save. Nothing is saved.
 - Writes one line to the log for each Miho race def that had duplicates.
-- Requires Harmony and Nice Health Tab. Miho is optional; load after it if you use it.
+- Requires Harmony. Nice Health Tab and Miho are optional; load after them if you use them.
 - The turret warning fix does not change any behavior.
 
 This mod was developed with the help of AI coding tools (Claude Code). Full source code is included in the Source folder for review.</description>
   <modDependencies>
     <li><packageId>brrainz.harmony</packageId><displayName>Harmony</displayName><steamWorkshopUrl>steam://url/CommunityFilePage/2009463077</steamWorkshopUrl></li>
-    <li><packageId>Andromeda.NiceHealthTab</packageId><displayName>Nice Health Tab</displayName><steamWorkshopUrl>steam://url/CommunityFilePage/3328729902</steamWorkshopUrl></li>
   </modDependencies>
   <loadAfter>
     <li>brrainz.harmony</li>

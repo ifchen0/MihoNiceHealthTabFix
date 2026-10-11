@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Patch>
+  <!-- Miho's top patron title awards one permit point, but Miho defines no permits, so the pawn shows "Permit choice ready"
+       and a "Choose permit" button forever while the permit list stays empty. Only applies while no permit names the Miho
+       faction, so it steps aside if Miho (or another mod) adds permits later. -->
+  <Operation Class="PatchOperationConditional" MayRequire="miho.fortifiedoutremer">
+    <xpath>Defs/RoyalTitlePermitDef[faction="Miho_Faction_Megacorp"]</xpath>
+    <nomatch Class="PatchOperationConditional">
+      <xpath>Defs/RoyalTitleDef[defName="Miho_Patron_T3"]/permitPointsAwarded</xpath>
+      <match Class="PatchOperationReplace">
+        <xpath>Defs/RoyalTitleDef[defName="Miho_Patron_T3"]/permitPointsAwarded</xpath>
+        <value>
+          <permitPointsAwarded>0</permitPointsAwarded>
+        </value>
+      </match>
+    </nomatch>
+  </Operation>
+</Patch>

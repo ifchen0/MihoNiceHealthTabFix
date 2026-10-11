@@ -1,4 +1,4 @@
-Small patches for [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3328729902]Nice Health Tab[/url] and [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2816826107]Miho[/url]. The Miho patches only apply when Miho is loaded.
+Small patches for [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3328729902]Nice Health Tab[/url] and [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2816826107]Miho[/url]. Both are optional: the Nice Health Tab patches only load when Nice Health Tab is active, and the Miho patches only apply when Miho is loaded, so the Miho fixes also work without Nice Health Tab.
 
 [h2]Miho: operations list never settles[/h2][b]Cause:[/b] In RimWorld 1.6 the human surgeries (bionic parts, prosthetics, organ transplants and so on) are given to humans through their [i]recipeUsers[/i] list. Miho turns on Humanoid Alien Races' [i]humanRecipeImport[/i], which adds Miho to those lists, and the Miho race def also lists the same surgeries in its own [i]recipes[/i]. Vanilla [i]ThingDef.AllRecipes[/i] joins both sources without removing duplicates, so every one of these surgeries appears twice for Miho. In my game that was 23 duplicate surgeries.
 
@@ -6,19 +6,19 @@ Nice Health Tab identifies each row of its animated operations list by surgery a
 
 [b]Fix:[/b] Once at startup, the surgery list of every Miho race def is deduplicated in place, keeping the first entry so the order does not change. Only entries that really appear twice are removed, so nothing is lost even if a Miho update changes its list. Other races are not touched.
 
-[h2]Prosthetic arm drawn as wood[/h2][b]Cause:[/b] Nice Health Tab maps the vanilla [i]SimpleProstheticArm[/i] to its [i]WoodenPart[/i] image, but that arm is made of steel and components. The actual wooden part in vanilla is the wooden hand.
+[h2]Nice Health Tab: prosthetic arm drawn as wood[/h2][b]Cause:[/b] Nice Health Tab maps the vanilla [i]SimpleProstheticArm[/i] to its [i]WoodenPart[/i] image, but that arm is made of steel and components. The actual wooden part in vanilla is the wooden hand.
 
 [b]Fix:[/b] An XML patch removes those image overrides, so the arm is drawn like other artificial parts such as the bionic arm.
 
-[h2]Buttons hard to see[/h2][b]Cause:[/b] The inactive buttons around the body doll are drawn at 25% opacity until the mouse is over them, which is hard to see on the dark background.
+[h2]Nice Health Tab: buttons hard to see[/h2][b]Cause:[/b] The inactive buttons around the body doll are drawn at 25% opacity until the mouse is over them, which is hard to see on the dark background.
 
 [b]Fix:[/b] They are always drawn with their hover color. Active buttons are unchanged.
 
-[h2]Missing ears, jaw and limb bones not shown on the doll[/h2][b]Cause:[/b] The body doll only colors parts that have their own image. A missing ear, jaw, tongue, humerus, radius, femur or tibia has none, so the head, arm or leg still looks intact and the loss only shows in the list next to the doll.
+[h2]Nice Health Tab: missing ears, jaw and limb bones not shown on the doll[/h2][b]Cause:[/b] The body doll only colors parts that have their own image. A missing ear, jaw, tongue, humerus, radius, femur or tibia has none, so the head, arm or leg still looks intact and the loss only shows in the list next to the doll.
 
 [b]Fix:[/b] A white cross is drawn beside the head, arm or leg when one of these parts is missing. The part keeps its injury or prosthesis color. Hovering the cross or the part lists the missing parts, and clicking the cross opens their surgery menu. No surgery targets a limb bone, so for those the menu of the leg or shoulder opens instead.
 
-[h2]Badly hurt parts shown as missing[/h2][b]Cause:[/b] Nice Health Tab computes part health with its own copy of the vanilla calculation, so mods that change part health are ignored. With [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2260055393]Just A Flesh Wound[/url], a part that takes lethal damage is kept at 1 HP and can still heal, and the vanilla health tab shows it that way, but Nice Health Tab still sees 0 and draws the part as missing (not drawn at all) on the doll.
+[h2]Nice Health Tab: badly hurt parts shown as missing[/h2][b]Cause:[/b] Nice Health Tab computes part health with its own copy of the vanilla calculation, so mods that change part health are ignored. With [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2260055393]Just A Flesh Wound[/url], a part that takes lethal damage is kept at 1 HP and can still heal, and the vanilla health tab shows it that way, but Nice Health Tab still sees 0 and draws the part as missing (not drawn at all) on the doll.
 
 [b]Fix:[/b] When Nice Health Tab gets 0 health for a part that has not actually been removed, the game's own part health is used instead, so the part is drawn as seriously damaged. Parts that really are missing are unchanged. Without such a mod the result is the same as before.
 
@@ -30,10 +30,18 @@ Nice Health Tab identifies each row of its animated operations list by surgery a
 
 [b]Fix:[/b] Vanilla already falls back to the largest circle in that case; the same value is now returned without logging the error. Behavior is unchanged. Works for any long range turret, not just Miho's.
 
+[h2]Miho: permit choice that cannot be made[/h2][b]Cause:[/b] Miho's top patron title awards one permit point, but Miho defines no permits. A pawn with that title shows the [i]Permit choice ready[/i] alert and a [i]Choose permit[/i] button forever, and the permit list they open is empty.
+
+[b]Fix:[/b] An XML patch sets that title's permit points to 0. It only applies while no permit belongs to the Miho faction, so it steps aside if permits are added later.
+
+[h2]Favor cannot be spent at favor traders[/h2][b]Cause:[/b] Some traders, such as Miho's relic curators, use royal favor as their currency. Vanilla always shows 0 favor on the colony side of the trade window and only handles favor going to the player, so you can sell to them for favor but cannot buy anything they stock with the favor you have.
+
+[b]Fix:[/b] The colony side now shows the negotiator's favor with the trader's faction, and buying from the trader removes the cost from that favor. Buy prices in favor are rounded up to whole points instead of showing long decimals. Choose the pawn holding the favor as the negotiator. Works for any trader that uses favor, not just Miho's.
+
 [h2]Notes[/h2][list]
 [*]Safe to add to or remove from an existing save. Nothing is saved.
 [*]Writes one line to the log for each Miho race def that had duplicates, e.g. [i][NiceHealthTabPatch] Removed 23 duplicate recipes from Alien_Miho.[/i]
-[*]Requires Harmony and Nice Health Tab. Miho is optional; load after it if you use it.
+[*]Requires Harmony. Nice Health Tab and Miho are optional; load after them if you use them.
 [/list]
 [hr][/hr]
 This mod was developed with the help of AI coding tools (Claude Code). Full source code is included in the Source folder and on [url=https://github.com/ifchen0/MihoNiceHealthTabFix]GitHub[/url] for review.

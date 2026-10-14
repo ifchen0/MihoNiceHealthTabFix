@@ -4,7 +4,7 @@
   <author>ifchen0</author>
   <packageId>ifchen0.nicehealthtabpatch</packageId>
   <url>https://github.com/ifchen0/MihoNiceHealthTabFix</url>
-  <supportedVersions><li>1.6</li></supportedVersions>
+  <supportedVersions><li>1.6</li><li>1.7</li></supportedVersions>
   <description>Small patches for Nice Health Tab and Miho. Both are optional: the Nice Health Tab patches only load when Nice Health Tab is active, and the Miho patches only apply when Miho is loaded.
 
 Miho operations list (only when Miho is loaded): Miho enables Humanoid Alien Races' humanRecipeImport, which registers the race for every human surgery, and also lists the same surgeries in its own race def. Vanilla does not remove duplicates when combining the two, so every surgery appears twice for Miho. Nice Health Tab identifies each operation row by surgery and body part, so the duplicate rows fight over the same position and the list never slides into place. Once at startup, the surgery list of Miho race defs is deduplicated, keeping the first entry so the order does not change. Only entries that really appear twice are removed, so this stays safe if Miho changes its list. Other races are not touched.

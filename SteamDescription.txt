@@ -22,6 +22,8 @@ Nice Health Tab identifies each row of its animated operations list by surgery a
 
 [b]Fix:[/b] When Nice Health Tab gets 0 health for a part that has not actually been removed, the game's own part health is used instead, so the part is drawn as seriously damaged. Parts that really are missing are unchanged. Without such a mod the result is the same as before.
 
+[h2]Nice Health Tab: surgery menu from the part list[/h2]Right-clicking a body part in the list next to the doll opens the same surgery menu as clicking that part on the doll. The whole-body entry opens the whole-body surgeries.
+
 [h2]Miho: missile turret error on load[/h2][b]Cause:[/b] Miho's missile turret gun ([i]Miho_BuildingWeapon_Missile[/i]) lists [i]CompEquippable[/i] in its comps, but its parent [i]BaseWeapon[/i] already provides it, so the gun ends up with two. Both save the same verb, and loading a save logs [i]Exception registering Verse.Verb_Shoot ... An item with the same key has already been added[/i] once per missile turret.
 
 [b]Fix:[/b] An XML patch removes the extra copy; the inherited one stays. Existing saves load fine and are cleaned up the next time they are saved.

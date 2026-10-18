@@ -147,6 +147,23 @@ namespace NiceHealthTabPatch
         }
 
         /// <summary>
+        /// Captures the surgery options of a part, falling back to its nearest ancestor with options
+        /// below the torso; a null part or the torso gives the whole-body surgeries.
+        /// </summary>
+        internal static List<FloatMenuOption> PartSurgeryOptions(Pawn pawn, BodyPartRecord part, Thing thingForMedBills)
+        {
+            if (part == null || part.parent == null)
+                return SurgeryOptions(pawn, part, thingForMedBills);
+            for (BodyPartRecord p = part; p != null && p.parent != null; p = p.parent)
+            {
+                List<FloatMenuOption> options = SurgeryOptions(pawn, p, thingForMedBills);
+                if (options != null)
+                    return options;
+            }
+            return null;
+        }
+
+        /// <summary>
         /// Captures the options of the menu Nice Health Tab opens for a part, or null when it opens none.
         /// </summary>
         private static List<FloatMenuOption> SurgeryOptions(Pawn pawn, BodyPartRecord part, Thing thingForMedBills)

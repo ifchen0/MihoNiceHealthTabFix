@@ -28,6 +28,10 @@ Nice Health Tab identifies each row of its animated operations list by surgery a
 
 [b]Fix:[/b] An XML patch removes the extra copy; the inherited one stays. Existing saves load fine and are cleaned up the next time they are saved.
 
+[h2]Miho: guided missiles explode short of the target[/h2][b]Cause:[/b] Miho's guided missiles (from the missile turret and the mechs' plasma missiles) have a 2-cell proximity fuse. As soon as their path comes that close to the target they explode right there, even when the missile's own hit roll succeeded. The blast is then up to 2 cells short: the plasma missile (radius 1.5) misses the target completely on a straight approach, and the regular missile (radius 2.5) only reaches it at the edge, and not at all if a wall is in between.
+
+[b]Fix:[/b] A missile that rolled a hit now explodes on its target. Missiles that missed the roll or lost track still explode where the fuse goes off, as before. Applies to both sides, so enemy Miho missiles hit harder too.
+
 [h2]Long range turret warning[/h2][b]Cause:[/b] Enemy AI marks the area around player turrets to avoid, using the turret range plus 4 cells. For turrets with very long range, such as Miho's missile turret (range 200), that is beyond the largest circle the game has precomputed (radius about 80), so the log shows [i]Not enough squares to get to radius 204. Max is 79.81228[/i] for each such turret whenever the area is rebuilt (for example on every load).
 
 [b]Fix:[/b] Vanilla already falls back to the largest circle in that case; the same value is now returned without logging the error. Behavior is unchanged. Works for any long range turret, not just Miho's.

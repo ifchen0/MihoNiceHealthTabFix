@@ -1,48 +1,48 @@
 Small patches for [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3328729902]Nice Health Tab[/url] and [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2816826107]Miho[/url]. Both are optional: the Nice Health Tab patches only load when Nice Health Tab is active, and the Miho patches only apply when Miho is loaded, so the Miho fixes also work without Nice Health Tab.
 
-[h2]Miho: operations list never settles[/h2][b]Cause:[/b] In RimWorld 1.6 the human surgeries (bionic parts, prosthetics, organ transplants and so on) are given to humans through their [i]recipeUsers[/i] list. Miho turns on Humanoid Alien Races' [i]humanRecipeImport[/i], which adds Miho to those lists, and the Miho race def also lists the same surgeries in its own [i]recipes[/i]. Vanilla [i]ThingDef.AllRecipes[/i] joins both sources without removing duplicates, so every one of these surgeries appears twice for Miho. In my game that was 23 duplicate surgeries.
+[h2]Miho: operations list never settles[/h2][b]Cause:[/b] Miho gets the human surgeries twice: through Humanoid Alien Races' [i]humanRecipeImport[/i] and through its own [i]recipes[/i] list (23 duplicates in my game). Nice Health Tab's animated operations list keeps pulling the duplicate rows toward two positions, and the vanilla Add bill menu lists them twice.
 
-Nice Health Tab identifies each row of its animated operations list by surgery and body part. Two rows with the same identity end up sharing one slot that is pulled toward two positions at once, so the list never slides into place. The vanilla Add bill menu also shows these surgeries twice.
+[b]Fix:[/b] At startup the surgery list of every Miho race def is deduplicated, keeping the order. Only real duplicates are removed, so a Miho update cannot make surgeries disappear.
 
-[b]Fix:[/b] Once at startup, the surgery list of every Miho race def is deduplicated in place, keeping the first entry so the order does not change. Only entries that really appear twice are removed, so nothing is lost even if a Miho update changes its list. Other races are not touched.
+[h2]Nice Health Tab: prosthetic arm drawn as wood[/h2][b]Cause:[/b] Nice Health Tab draws the vanilla [i]SimpleProstheticArm[/i] (steel and components) with its wooden part image.
 
-[h2]Nice Health Tab: prosthetic arm drawn as wood[/h2][b]Cause:[/b] Nice Health Tab maps the vanilla [i]SimpleProstheticArm[/i] to its [i]WoodenPart[/i] image, but that arm is made of steel and components. The actual wooden part in vanilla is the wooden hand.
+[b]Fix:[/b] An XML patch removes that override, so the arm is drawn like the bionic arm.
 
-[b]Fix:[/b] An XML patch removes those image overrides, so the arm is drawn like other artificial parts such as the bionic arm.
+[h2]Nice Health Tab: buttons hard to see[/h2]The inactive buttons around the body doll were drawn at 25% opacity until hovered. They now always use their hover color; active buttons are unchanged.
 
-[h2]Nice Health Tab: buttons hard to see[/h2][b]Cause:[/b] The inactive buttons around the body doll are drawn at 25% opacity until the mouse is over them, which is hard to see on the dark background.
+[h2]Nice Health Tab: missing ears, jaw and limb bones not shown on the doll[/h2][b]Cause:[/b] The doll only colors parts that have their own image, so a missing ear, jaw, tongue, humerus, radius, femur or tibia leaves the head, arm or leg looking intact.
 
-[b]Fix:[/b] They are always drawn with their hover color. Active buttons are unchanged.
+[b]Fix:[/b] A white cross is drawn beside the head, arm or leg when one of these parts is missing. Hovering it lists the missing parts; clicking it opens their surgery menu (for limb bones, the leg or shoulder menu).
 
-[h2]Nice Health Tab: missing ears, jaw and limb bones not shown on the doll[/h2][b]Cause:[/b] The body doll only colors parts that have their own image. A missing ear, jaw, tongue, humerus, radius, femur or tibia has none, so the head, arm or leg still looks intact and the loss only shows in the list next to the doll.
+[h2]Nice Health Tab: badly hurt parts shown as missing[/h2][b]Cause:[/b] Nice Health Tab uses its own copy of the part health calculation, so mods that change part health are ignored. With [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2260055393]Just A Flesh Wound[/url], a part kept at 1 HP is drawn as missing.
 
-[b]Fix:[/b] A white cross is drawn beside the head, arm or leg when one of these parts is missing. The part keeps its injury or prosthesis color. Hovering the cross or the part lists the missing parts, and clicking the cross opens their surgery menu. No surgery targets a limb bone, so for those the menu of the leg or shoulder opens instead.
-
-[h2]Nice Health Tab: badly hurt parts shown as missing[/h2][b]Cause:[/b] Nice Health Tab computes part health with its own copy of the vanilla calculation, so mods that change part health are ignored. With [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2260055393]Just A Flesh Wound[/url], a part that takes lethal damage is kept at 1 HP and can still heal, and the vanilla health tab shows it that way, but Nice Health Tab still sees 0 and draws the part as missing (not drawn at all) on the doll.
-
-[b]Fix:[/b] When Nice Health Tab gets 0 health for a part that has not actually been removed, the game's own part health is used instead, so the part is drawn as seriously damaged. Parts that really are missing are unchanged. Without such a mod the result is the same as before.
+[b]Fix:[/b] When Nice Health Tab gets 0 health for a part that is not actually removed, the game's own part health is used. Without such a mod nothing changes.
 
 [h2]Nice Health Tab: surgery menu from the part list[/h2]Right-clicking a body part in the list next to the doll opens the same surgery menu as clicking that part on the doll. The whole-body entry opens the whole-body surgeries.
 
-[h2]Miho: missile turret error on load[/h2][b]Cause:[/b] Miho's missile turret gun ([i]Miho_BuildingWeapon_Missile[/i]) lists [i]CompEquippable[/i] in its comps, but its parent [i]BaseWeapon[/i] already provides it, so the gun ends up with two. Both save the same verb, and loading a save logs [i]Exception registering Verse.Verb_Shoot ... An item with the same key has already been added[/i] once per missile turret.
+[h2]Nice Health Tab: alien race hair and ears (experimental)[/h2][b]Cause:[/b] The doll only draws vanilla hair styles on its head. Races that turn vanilla hair styles off and wear their hair and ears as Humanoid Alien Races body addons instead, such as Miho, get a bald doll.
 
-[b]Fix:[/b] An XML patch removes the extra copy; the inherited one stays. Existing saves load fine and are cleaned up the next time they are saved.
+[b]Fix:[/b] For those races only, the hair and ear addons are now drawn on the doll head, fitted to its size, and recolored by health like vanilla hair. Hair that sits behind the face is left out. On by default; can be turned off in the mod settings. Only in the default health tab view, not the legacy one.
 
-[h2]Miho: guided missiles explode short of the target[/h2][b]Cause:[/b] Miho's guided missiles (from the missile turret and the mechs' plasma missiles) have a 2-cell proximity fuse. As soon as their path comes that close to the target they explode right there, even when the missile's own hit roll succeeded. The blast is then up to 2 cells short: the plasma missile (radius 1.5) misses the target completely on a straight approach, and the regular missile (radius 2.5) only reaches it at the edge, and not at all if a wall is in between.
+[h2]Miho: missile turret error on load[/h2][b]Cause:[/b] Miho's missile turret gun gets [i]CompEquippable[/i] twice (its own comps plus the inherited one), so loading a save logs [i]Exception registering Verse.Verb_Shoot ... An item with the same key has already been added[/i] once per missile turret.
 
-[b]Fix:[/b] A missile that rolled a hit now explodes on its target. Missiles that missed the roll or lost track still explode where the fuse goes off, as before. Applies to both sides, so enemy Miho missiles hit harder too.
+[b]Fix:[/b] An XML patch removes the extra copy. Existing saves load fine and are cleaned up the next time they are saved.
 
-[h2]Long range turret warning[/h2][b]Cause:[/b] Enemy AI marks the area around player turrets to avoid, using the turret range plus 4 cells. For turrets with very long range, such as Miho's missile turret (range 200), that is beyond the largest circle the game has precomputed (radius about 80), so the log shows [i]Not enough squares to get to radius 204. Max is 79.81228[/i] for each such turret whenever the area is rebuilt (for example on every load).
+[h2]Miho: guided missiles explode short of the target[/h2][b]Cause:[/b] Miho's guided missiles (missile turret and the mechs' plasma missiles) have a 2-cell proximity fuse and explode as soon as they get that close, even when their hit roll succeeded. The plasma missile then misses completely, and the regular missile only grazes the target.
 
-[b]Fix:[/b] Vanilla already falls back to the largest circle in that case; the same value is now returned without logging the error. Behavior is unchanged. Works for any long range turret, not just Miho's.
+[b]Fix:[/b] A missile that rolled a hit now explodes on its target. Missiles that missed or lost track behave as before. Applies to both sides.
 
-[h2]Miho: permit choice that cannot be made[/h2][b]Cause:[/b] Miho's top patron title awards one permit point, but Miho defines no permits. A pawn with that title shows the [i]Permit choice ready[/i] alert and a [i]Choose permit[/i] button forever, and the permit list they open is empty.
+[h2]Long range turret warning[/h2][b]Cause:[/b] Enemy AI avoids the area around player turrets (range plus 4 cells). For turrets beyond radius about 80, such as Miho's missile turret, the log shows [i]Not enough squares to get to radius 204. Max is 79.81228[/i] whenever that area is rebuilt.
 
-[b]Fix:[/b] An XML patch sets that title's permit points to 0. It only applies while no permit belongs to the Miho faction, so it steps aside if permits are added later.
+[b]Fix:[/b] Vanilla already falls back to the largest circle; the same value is now returned without the error. Works for any long range turret.
 
-[h2]Favor cannot be spent at favor traders[/h2][b]Cause:[/b] Some traders, such as Miho's relic curators, use royal favor as their currency. Vanilla always shows 0 favor on the colony side of the trade window and only handles favor going to the player, so you can sell to them for favor but cannot buy anything they stock with the favor you have.
+[h2]Miho: permit choice that cannot be made[/h2][b]Cause:[/b] Miho's top patron title awards a permit point, but Miho has no permits, so [i]Permit choice ready[/i] shows forever with an empty permit list.
 
-[b]Fix:[/b] The colony side now shows the negotiator's favor with the trader's faction, and buying from the trader removes the cost from that favor. Buy prices in favor are rounded up to whole points instead of showing long decimals. Choose the pawn holding the favor as the negotiator. Works for any trader that uses favor, not just Miho's.
+[b]Fix:[/b] An XML patch sets that title's permit points to 0, only while no Miho permit exists.
+
+[h2]Favor cannot be spent at favor traders[/h2][b]Cause:[/b] Some traders, such as Miho's relic curators, take royal favor as currency, but vanilla shows 0 favor on the colony side and only handles favor going to the player, so you can sell to them but not buy.
+
+[b]Fix:[/b] The colony side shows the negotiator's favor with the trader's faction, buying removes the cost from it, and prices are rounded up to whole points. Choose the pawn holding the favor as the negotiator. Works for any favor trader.
 
 [h2]Notes[/h2][list]
 [*]Safe to add to or remove from an existing save. Nothing is saved.

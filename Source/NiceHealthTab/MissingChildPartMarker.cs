@@ -300,27 +300,10 @@ namespace NiceHealthTabPatch
         /// <summary>
         /// Returns the opaque area inside <paramref name="uv"/> as fractions of that area.
         /// </summary>
-        /// <remarks>Game textures are not CPU-readable, so the texture is copied through a render texture once.</remarks>
         private static Rect FindOpaqueBounds(Texture2D tex, Rect uv)
         {
             int w = tex.width, h = tex.height;
-            RenderTexture rt = RenderTexture.GetTemporary(w, h, 0, RenderTextureFormat.ARGB32);
-            RenderTexture previous = RenderTexture.active;
-            Texture2D copy = new Texture2D(w, h, TextureFormat.RGBA32, false);
-            try
-            {
-                Graphics.Blit(tex, rt);
-                RenderTexture.active = rt;
-                copy.ReadPixels(new Rect(0, 0, w, h), 0, 0);
-                copy.Apply();
-            }
-            finally
-            {
-                RenderTexture.active = previous;
-                RenderTexture.ReleaseTemporary(rt);
-            }
-            Color32[] pixels = copy.GetPixels32();
-            UnityEngine.Object.Destroy(copy);
+            Color32[] pixels = TexturePixels.Read(tex);
 
             int x0 = Mathf.FloorToInt(uv.xMin * w), x1 = Mathf.CeilToInt(uv.xMax * w);
             int y0 = Mathf.FloorToInt(uv.yMin * h), y1 = Mathf.CeilToInt(uv.yMax * h);

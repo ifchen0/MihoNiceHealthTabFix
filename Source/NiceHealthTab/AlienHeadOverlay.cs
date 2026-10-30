@@ -35,7 +35,9 @@ namespace NiceHealthTabPatch
     /// width and center of their opaque bounds. Addon conditions
     /// (posture, drafted, hiding apparel) are ignored and of the addons sharing a base path only the
     /// first is drawn: Miho repeats each addon for standing and lying (the two copies can roll
-    /// different variants), and the doll shows hair under headgear like Nice Health Tab does.
+    /// different variants), and the doll shows hair under headgear like Nice Health Tab does. When
+    /// the pawn gets such outline addons, the doll head and outline are swapped for copies without
+    /// the human ears (<see cref="EarlessHead"/>) while the doll is drawn, so it does not show four ears.
     ///
     /// Tail: the body addons that lie mostly outside the body graphic and below the chin. They are
     /// drawn before the doll, so the body and its outline cover the root, in the healthy part color
@@ -82,6 +84,7 @@ namespace NiceHealthTabPatch
         private sealed class CachedOverlay
         {
             public Texture2D tex;   // null when the pawn has nothing to draw
+            public bool ears;       // addons sticking out of the head outline are drawn
             public int lastUsedFrame;
         }
 
@@ -107,6 +110,7 @@ namespace NiceHealthTabPatch
         private static readonly Dictionary<Texture, Color32[]> pixelCache = new Dictionary<Texture, Color32[]>();
         private static readonly List<PawnRenderNode> hairNodes = new List<PawnRenderNode>();
         private static readonly List<PawnRenderNode> bodyHeadNodes = new List<PawnRenderNode>();
+        private static bool composedEars;   // set by Compose for the overlay it builds
         private static readonly Dictionary<ThingDef, bool> noVanillaHairRaces = new Dictionary<ThingDef, bool>();
         private static Game cacheGame;
         private static Rect? vanillaHeadBounds;
@@ -131,7 +135,8 @@ namespace NiceHealthTabPatch
                 harmony.Patch(AccessTools.Method(typeof(DollPartRenderer), "DrawHeadOverlay"),
                     postfix: new HarmonyMethod(typeof(AlienHeadOverlay), nameof(DrawHeadOverlayPostfix)));
                 harmony.Patch(AccessTools.Method(typeof(DollRenderer), nameof(DollRenderer.DrawDoll)),
-                    prefix: new HarmonyMethod(typeof(AlienHeadOverlay), nameof(DrawDollPrefix)));
+                    prefix: new HarmonyMethod(typeof(AlienHeadOverlay), nameof(DrawDollPrefix)),
+                    finalizer: new HarmonyMethod(typeof(AlienHeadOverlay), nameof(DrawDollFinalizer)));
             }
             catch (Exception e)
             {
@@ -164,7 +169,7 @@ namespace NiceHealthTabPatch
                 return;
             try
             {
-                Texture2D tex = OverlayFor(pawn);
+                Texture2D tex = OverlayFor(pawn)?.tex;
                 if (tex == null)
                     return;
                 // Nice Health Tab's materials are made in its own startup constructor, so read them on first use.
@@ -188,8 +193,20 @@ namespace NiceHealthTabPatch
             }
         }
 
-        private static void DrawDollPrefix(DollRenderContext ctx, Doll doll, Rect rect)
+        /// <summary>
+        /// The doll head and outline swapped for the earless copies while the doll is drawn.
+        /// </summary>
+        private struct HeadSwap
         {
+            public DollBodyPartDef part;
+            public Texture2D head;
+            public Doll doll;
+            public Texture2D outline;
+        }
+
+        private static void DrawDollPrefix(DollRenderContext ctx, Doll doll, Rect rect, out HeadSwap __state)
+        {
+            __state = default;
             Pawn pawn = ctx?.Pawn;
             if (failed || pawn == null || !NiceHealthTabPatchMod.Settings.alienHeadOverlay
                 || !(doll is HumanlikeDoll humanlike) || humanlike.headPart == null || doll.outlineTex == null
@@ -197,6 +214,7 @@ namespace NiceHealthTabPatch
                 return;
             try
             {
+                SwapEarlessHead(pawn, humanlike, ref __state);
                 TailInfo info = TailFor(pawn);
                 if (info == null)
                     return;
@@ -223,6 +241,32 @@ namespace NiceHealthTabPatch
                 failed = true;
                 Log.Error("[NiceHealthTabPatch] Alien tail overlay failed and the alien overlays are turned off until restart: " + e);
             }
+        }
+
+        private static void SwapEarlessHead(Pawn pawn, HumanlikeDoll doll, ref HeadSwap swap)
+        {
+            DollBodyPartDef part = doll.headPart;
+            if (!NiceHediffTabSettings.ShowHair || part.UsesAtlas || part.tex == null)
+                return;
+            CachedOverlay overlay = OverlayFor(pawn);
+            if (overlay?.tex == null || !overlay.ears)
+                return;
+            Texture2D head = EarlessHead.Head(part.tex);
+            if (head == null)
+                return;
+            Texture2D outline = EarlessHead.Outline(doll.outlineTex, part);
+            swap = new HeadSwap { part = part, head = part.tex, doll = doll, outline = doll.outlineTex };
+            part.tex = head;
+            if (outline != null)
+                doll.outlineTex = outline;
+        }
+
+        private static void DrawDollFinalizer(HeadSwap __state)
+        {
+            if (__state.part != null)
+                __state.part.tex = __state.head;
+            if (__state.doll != null)
+                __state.doll.outlineTex = __state.outline;
         }
 
         /// <summary>
@@ -355,7 +399,7 @@ namespace NiceHealthTabPatch
         /// The key holds everything the composite depends on: the race, the addon graphics, head and
         /// body type, gender (HAR has female offsets) and head width (children).
         /// </remarks>
-        private static Texture2D OverlayFor(Pawn pawn)
+        private static CachedOverlay OverlayFor(Pawn pawn)
         {
             if (cacheGame != Current.Game)
             {
@@ -388,7 +432,9 @@ namespace NiceHealthTabPatch
 
             if (!overlays.TryGetValue(key, out CachedOverlay cached))
             {
+                composedEars = false;
                 cached = new CachedOverlay { tex = Compose(pawn, head, hairNodes, bodyHeadNodes) };
+                cached.ears = composedEars;
                 // Source pixels are only needed while composing; keeping them would grow with every style seen.
                 pixelCache.Clear();
                 overlays[key] = cached;
@@ -396,7 +442,7 @@ namespace NiceHealthTabPatch
                     EvictLeastRecentlyUsed(key);
             }
             cached.lastUsedFrame = Time.frameCount;
-            return cached.tex;
+            return cached;
         }
 
         private static void EvictLeastRecentlyUsed(string keep)
@@ -493,7 +539,10 @@ namespace NiceHealthTabPatch
                 bool ear = outside >= OutsideShare;
                 bool hair = drawHair && ColorChannel(node) == "hair";
                 if ((ear || hair) && seen.Add(addonPathField.GetValue(addonField.GetValue(node.Props)) as string ?? layer.tex.name))
+                {
                     layers.Add(layer);
+                    composedEars |= ear;
+                }
             }
             layers.Sort((a, b) => a.layer.CompareTo(b.layer));
 
@@ -511,7 +560,10 @@ namespace NiceHealthTabPatch
                     continue;
                 float outside = OutsidePixelShare(layer, headLayers);
                 if (outside >= OutsideShare && seen.Add(AddonPath(node) ?? layer.tex.name))
+                {
                     bodyLayers.Add(layer);
+                    composedEars = true;
+                }
             }
             bodyLayers.Sort((a, b) => a.layer.CompareTo(b.layer));
             layers.InsertRange(0, bodyLayers);

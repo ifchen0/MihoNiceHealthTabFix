@@ -20,7 +20,7 @@ namespace NiceHealthTabPatch
     ///
     /// Head: the race head is the head graphic, or when that is blank (Miho) the "skin" head addons
     /// covering the head center (the face). The candidates are the head addons plus the drawable body
-    /// addons above the chin (Weazel's ears are body addons). Those whose opaque pixels lie mostly
+    /// addons lying wholly above the chin (Weazel's ears are body addons). Those whose opaque pixels lie mostly
     /// off the race head's opaque pixels extend its outline (ears, horns) and are drawn for any race;
     /// pixels rather than bounds, since ears on a round head sit in the corners of its bounds; nothing tells an ear from
     /// other headgear, so the rule is purely the outline. Addons with the "hair" color channel are
@@ -39,7 +39,8 @@ namespace NiceHealthTabPatch
     /// the pawn gets such outline addons, the doll head and outline are swapped for copies without
     /// the human ears (<see cref="EarlessHead"/>) while the doll is drawn, so it does not show four ears.
     ///
-    /// Tail: the body addons that lie mostly outside the body graphic and below the chin. They are
+    /// Tail: the body addons that lie mostly outside the body graphic and reach below the chin (Miho's
+    /// drafted tail points up, so its center is above the chin but its root is not). They are
     /// drawn before the doll, so the body and its outline cover the root, in the healthy part color
     /// (a race on the human body has no tail part). Their conditions are checked, since Miho swaps
     /// tails when drafted. The race body is fitted to the doll by the chin-to-feet span: the race chin
@@ -50,7 +51,7 @@ namespace NiceHealthTabPatch
     /// of the race body so their opaque height is <see cref="TailLength"/> of the doll's chin-to-feet span.
     /// </remarks>
     [StaticConstructorOnStartup]
-    public static class AlienHeadOverlay
+    public static class AlienAddonOverlay
     {
         private const string AddonPropsTypeName = "AlienRace.AlienPawnRenderNodeProperties_BodyAddon";
         // Vanilla hair and head meshes are this wide; the overlay rect covers one of them.
@@ -66,6 +67,7 @@ namespace NiceHealthTabPatch
         private static readonly FieldInfo addonPathField;
         private static readonly PropertyInfo colorChannelProperty;
         private static readonly MethodInfo canDrawAddonMethod;
+        private static readonly object[] canDrawArgs = new object[1];
         private static readonly Type addonPropsType;
         private static readonly Action<DollRenderContext, Rect, Texture2D, Material, Color> drawHairClipped;
         private static readonly FieldInfo hairMaterialField;
@@ -109,14 +111,19 @@ namespace NiceHealthTabPatch
         private static readonly List<PawnRenderNode> tailNodes = new List<PawnRenderNode>();
         private static readonly List<PawnRenderNode> faceKeyNodes = new List<PawnRenderNode>();
         private static readonly Dictionary<Texture, Color32[]> pixelCache = new Dictionary<Texture, Color32[]>();
-        private static readonly List<PawnRenderNode> hairNodes = new List<PawnRenderNode>();
-        private static readonly List<PawnRenderNode> bodyHeadNodes = new List<PawnRenderNode>();
-        private static bool composedEars;   // set by Compose for the overlay it builds
+        private static readonly List<PawnRenderNode> headAddonNodes = new List<PawnRenderNode>();
+        private static readonly List<PawnRenderNode> bodyAddonNodes = new List<PawnRenderNode>();
         private static readonly Dictionary<ThingDef, bool> noVanillaHairRaces = new Dictionary<ThingDef, bool>();
         private static Game cacheGame;
+        // OverlayFor and TailFor run several times per frame (every IMGUI event, prefix and postfix),
+        // so the last pawn's results are kept for the rest of the frame.
+        private static Pawn overlayMemoPawn, tailMemoPawn;
+        private static int overlayMemoFrame = -1, tailMemoFrame = -1;
+        private static CachedOverlay overlayMemo;
+        private static TailInfo tailMemo;
         private static Rect? vanillaHeadBounds;
 
-        static AlienHeadOverlay()
+        static AlienAddonOverlay()
         {
             addonPropsType = GenTypes.GetTypeInAnyAssembly(AddonPropsTypeName);
             if (addonPropsType == null)
@@ -134,33 +141,78 @@ namespace NiceHealthTabPatch
                 outlineMaterialField = AccessTools.Field(assets, "OutlineMaterial");
                 var harmony = new Harmony("ifchen0.nicehealthtabpatch");
                 harmony.Patch(AccessTools.Method(typeof(DollPartRenderer), "DrawHeadOverlay"),
-                    postfix: new HarmonyMethod(typeof(AlienHeadOverlay), nameof(DrawHeadOverlayPostfix)));
+                    postfix: new HarmonyMethod(typeof(AlienAddonOverlay), nameof(DrawHeadOverlayPostfix)));
                 harmony.Patch(AccessTools.Method(typeof(DollRenderer), nameof(DollRenderer.DrawDoll)),
-                    prefix: new HarmonyMethod(typeof(AlienHeadOverlay), nameof(DrawDollPrefix)),
-                    finalizer: new HarmonyMethod(typeof(AlienHeadOverlay), nameof(DrawDollFinalizer)));
+                    prefix: new HarmonyMethod(typeof(AlienAddonOverlay), nameof(DrawDollPrefix)),
+                    finalizer: new HarmonyMethod(typeof(AlienAddonOverlay), nameof(DrawDollFinalizer)));
             }
             catch (Exception e)
             {
                 failed = true;
-                Log.Warning("[NiceHealthTabPatch] Alien race head addons or Nice Health Tab head overlay not found; alien hair overlay skipped. " + e.Message);
+                Log.Warning("[NiceHealthTabPatch] Alien race addons or Nice Health Tab doll drawing not found; alien addon overlay skipped. " + e.Message);
             }
         }
 
         public static void ClearCache()
         {
             foreach (CachedOverlay overlay in overlays.Values)
-            {
-                if (overlay.tex != null)
-                    UnityEngine.Object.Destroy(overlay.tex);
-            }
+                DestroyTexture(overlay.tex);
             overlays.Clear();
-            foreach (TailInfo tail in tails.Values)
-            {
-                if (tail?.tex != null)
-                    UnityEngine.Object.Destroy(tail.tex);
-            }
-            tails.Clear();
+            ClearTails();
             pixelCache.Clear();
+            overlayMemoPawn = tailMemoPawn = null;
+        }
+
+        private static void ClearTails()
+        {
+            foreach (TailInfo tail in tails.Values)
+                DestroyTexture(tail?.tex);
+            tails.Clear();
+        }
+
+        private static void DestroyTexture(Texture2D tex)
+        {
+            if (tex != null)
+                UnityEngine.Object.Destroy(tex);
+        }
+
+        private static void ResetIfNewGame()
+        {
+            if (cacheGame == Current.Game)
+                return;
+            ClearCache();
+            cacheGame = Current.Game;
+        }
+
+        /// <summary>
+        /// The facing and pose every addon is measured in: south, standing, portrait.
+        /// </summary>
+        private static PawnDrawParms SouthPortraitParms(Pawn pawn)
+        {
+            PawnDrawParms parms = PawnDrawParms.DefaultFor(pawn);
+            parms.facing = Rot4.South;
+            parms.posture = PawnPosture.Standing;
+            parms.flags |= PawnRenderFlags.Portrait;
+            parms.flipHead = false;
+            return parms;
+        }
+
+        private static void AppendGraphicPaths(List<PawnRenderNode> nodes, Pawn pawn)
+        {
+            foreach (PawnRenderNode node in nodes)
+                keyBuilder.Append('|').Append(node.GraphicFor(pawn).path);
+        }
+
+        /// <summary>
+        /// The pawn-dependent part of the cache keys: head and body type, gender (HAR has female
+        /// offsets) and head width (children).
+        /// </summary>
+        private static void AppendAppearance(Pawn pawn)
+        {
+            keyBuilder.Append('|').Append(pawn.story?.headType?.defName)
+                .Append('|').Append(pawn.story?.bodyType?.defName)
+                .Append('|').Append((int)pawn.gender)
+                .Append('|').Append(HumanlikeMeshPoolUtility.HumanlikeHeadWidthForPawn(pawn).ToString("F3"));
         }
 
         private static void DrawHeadOverlayPostfix(DollRenderContext ctx, Pawn pawn, Rect overlayRect, DollBodyPartDef part, DollPartStatus status)
@@ -190,7 +242,7 @@ namespace NiceHealthTabPatch
             catch (Exception e)
             {
                 failed = true;
-                Log.Error("[NiceHealthTabPatch] Alien hair overlay failed and is turned off until restart: " + e);
+                Log.Error("[NiceHealthTabPatch] Alien addon overlay failed and is turned off until restart: " + e);
             }
         }
 
@@ -285,11 +337,18 @@ namespace NiceHealthTabPatch
         /// </summary>
         private static TailInfo TailFor(Pawn pawn)
         {
-            if (cacheGame != Current.Game)
+            if (pawn != tailMemoPawn || Time.frameCount != tailMemoFrame)
             {
-                ClearCache();
-                cacheGame = Current.Game;
+                tailMemo = TailForUncached(pawn);
+                tailMemoPawn = pawn;
+                tailMemoFrame = Time.frameCount;
             }
+            return tailMemo;
+        }
+
+        private static TailInfo TailForUncached(Pawn pawn)
+        {
+            ResetIfNewGame();
             PawnRenderTree tree = pawn.Drawer?.renderer?.renderTree;
             if (tree == null || !tree.Resolved
                 || !tree.TryGetNodeByTag(PawnRenderNodeTagDefOf.Body, out PawnRenderNode body)
@@ -301,18 +360,13 @@ namespace NiceHealthTabPatch
             if (tailNodes.Count == 0)
                 return null;
             keyBuilder.Clear().Append(pawn.def.defName);
-            foreach (PawnRenderNode node in tailNodes)
-                keyBuilder.Append('|').Append(node.GraphicFor(pawn).path);
+            AppendGraphicPaths(tailNodes, pawn);
             // The chin comes from the face addons when the head graphic is blank (Miho).
             faceKeyNodes.Clear();
             CollectAddons(head, pawn, "skin", faceKeyNodes);
             keyBuilder.Append("|face");
-            foreach (PawnRenderNode node in faceKeyNodes)
-                keyBuilder.Append('|').Append(node.GraphicFor(pawn).path);
-            keyBuilder.Append('|').Append(pawn.story?.headType?.defName)
-                .Append('|').Append(pawn.story?.bodyType?.defName)
-                .Append('|').Append((int)pawn.gender)
-                .Append('|').Append(HumanlikeMeshPoolUtility.HumanlikeHeadWidthForPawn(pawn).ToString("F3"));
+            AppendGraphicPaths(faceKeyNodes, pawn);
+            AppendAppearance(pawn);
             string key = keyBuilder.ToString();
             if (tails.TryGetValue(key, out TailInfo info))
                 return info;
@@ -320,25 +374,14 @@ namespace NiceHealthTabPatch
             info = MeasureTail(pawn, body, head, tailNodes);
             pixelCache.Clear();
             if (tails.Count >= MaxCachedTails)
-            {
-                foreach (TailInfo tail in tails.Values)
-                {
-                    if (tail?.tex != null)
-                        UnityEngine.Object.Destroy(tail.tex);
-                }
-                tails.Clear();
-            }
+                ClearTails();
             tails[key] = info;
             return info;
         }
 
         private static TailInfo MeasureTail(Pawn pawn, PawnRenderNode body, PawnRenderNode head, List<PawnRenderNode> nodes)
         {
-            PawnDrawParms parms = PawnDrawParms.DefaultFor(pawn);
-            parms.facing = Rot4.South;
-            parms.posture = PawnPosture.Standing;
-            parms.flags |= PawnRenderFlags.Portrait;
-            parms.flipHead = false;
+            PawnDrawParms parms = SouthPortraitParms(pawn);
 
             Layer bodyLayer = LayerFor(body, pawn, parms);
             Layer headLayer = LayerFor(head, pawn, parms);
@@ -366,8 +409,8 @@ namespace NiceHealthTabPatch
             {
                 Layer layer = LayerFor(node, pawn, parms);
                 Rect? opaque = layer == null ? null : OpaqueBounds(layer.tex, layer.rect);
-                // Only what sticks out of the body below the chin is a tail (Miho also has lying head addons on the body).
-                bool tail = opaque.HasValue && opaque.Value.center.y < info.chin && OutsideShareOf(opaque.Value, bodyBounds.Value) >= OutsideShare;
+                // Addons wholly above the chin belong to the head (Weazel's ears, Miho's lying faces).
+                bool tail = opaque.HasValue && opaque.Value.yMin < info.chin && OutsideAreaShare(opaque.Value, bodyBounds.Value) >= OutsideShare;
                 if (!tail)
                     continue;
                 layers.Add(layer);
@@ -399,56 +442,57 @@ namespace NiceHealthTabPatch
         }
 
         /// <summary>
-        /// Returns the cached composite of the pawn's hair addons, shared by pawns of the same
+        /// Returns the cached composite of the pawn's head addons, shared by pawns of the same
         /// appearance; null when the pawn has none.
         /// </summary>
         /// <remarks>
-        /// The key holds everything the composite depends on: the race, the addon graphics, head and
-        /// body type, gender (HAR has female offsets) and head width (children).
+        /// The key holds everything the composite depends on: the race, the addon graphics, the hair
+        /// style and <see cref="AppendAppearance"/>.
         /// </remarks>
         private static CachedOverlay OverlayFor(Pawn pawn)
         {
-            if (cacheGame != Current.Game)
+            if (pawn != overlayMemoPawn || Time.frameCount != overlayMemoFrame)
             {
-                ClearCache();
-                cacheGame = Current.Game;
+                overlayMemo = OverlayForUncached(pawn);
+                overlayMemoPawn = pawn;
+                overlayMemoFrame = Time.frameCount;
             }
+            if (overlayMemo != null)
+                overlayMemo.lastUsedFrame = Time.frameCount;
+            return overlayMemo;
+        }
+
+        private static CachedOverlay OverlayForUncached(Pawn pawn)
+        {
+            ResetIfNewGame();
             PawnRenderTree tree = pawn.Drawer?.renderer?.renderTree;
             if (tree == null || !tree.Resolved || !tree.TryGetNodeByTag(PawnRenderNodeTagDefOf.Head, out PawnRenderNode head))
                 return null;
 
-            hairNodes.Clear();
-            CollectAddons(head, pawn, null, hairNodes);
-            bodyHeadNodes.Clear();
+            headAddonNodes.Clear();
+            CollectAddons(head, pawn, null, headAddonNodes);
+            bodyAddonNodes.Clear();
             if (tree.TryGetNodeByTag(PawnRenderNodeTagDefOf.Body, out PawnRenderNode body))
-                CollectDrawableBodyAddons(body, head, pawn, bodyHeadNodes);
-            if (hairNodes.Count == 0 && bodyHeadNodes.Count == 0)
+                CollectDrawableBodyAddons(body, head, pawn, bodyAddonNodes);
+            if (headAddonNodes.Count == 0 && bodyAddonNodes.Count == 0)
                 return null;
             keyBuilder.Clear().Append(pawn.def.defName);
-            foreach (PawnRenderNode node in hairNodes)
-                keyBuilder.Append('|').Append(node.GraphicFor(pawn).path);
+            AppendGraphicPaths(headAddonNodes, pawn);
             keyBuilder.Append("|body");
-            foreach (PawnRenderNode node in bodyHeadNodes)
-                keyBuilder.Append('|').Append(node.GraphicFor(pawn).path);
-            keyBuilder.Append('|').Append(pawn.story?.headType?.defName)
-                .Append('|').Append(pawn.story?.hairDef?.defName)
-                .Append('|').Append(pawn.story?.bodyType?.defName)
-                .Append('|').Append((int)pawn.gender)
-                .Append('|').Append(HumanlikeMeshPoolUtility.HumanlikeHeadWidthForPawn(pawn).ToString("F3"));
+            AppendGraphicPaths(bodyAddonNodes, pawn);
+            keyBuilder.Append('|').Append(pawn.story?.hairDef?.defName);
+            AppendAppearance(pawn);
             string key = keyBuilder.ToString();
 
             if (!overlays.TryGetValue(key, out CachedOverlay cached))
             {
-                composedEars = false;
-                cached = new CachedOverlay { tex = Compose(pawn, head, hairNodes, bodyHeadNodes) };
-                cached.ears = composedEars;
+                cached = new CachedOverlay { tex = Compose(pawn, head, headAddonNodes, bodyAddonNodes, out bool ears), ears = ears };
                 // Source pixels are only needed while composing; keeping them would grow with every style seen.
                 pixelCache.Clear();
                 overlays[key] = cached;
                 if (overlays.Count > MaxCachedOverlays)
                     EvictLeastRecentlyUsed(key);
             }
-            cached.lastUsedFrame = Time.frameCount;
             return cached;
         }
 
@@ -466,8 +510,7 @@ namespace NiceHealthTabPatch
             }
             if (oldest == null)
                 return;
-            if (overlays[oldest].tex != null)
-                UnityEngine.Object.Destroy(overlays[oldest].tex);
+            DestroyTexture(overlays[oldest].tex);
             overlays.Remove(oldest);
         }
 
@@ -495,7 +538,8 @@ namespace NiceHealthTabPatch
             {
                 if (child == head || !addonPropsType.IsInstanceOfType(child.Props) || child.GraphicFor(pawn) == null)
                     continue;
-                if ((bool)canDrawAddonMethod.Invoke(addonField.GetValue(child.Props), new object[] { pawn }))
+                canDrawArgs[0] = pawn;
+                if ((bool)canDrawAddonMethod.Invoke(addonField.GetValue(child.Props), canDrawArgs))
                     result.Add(child);
             }
         }
@@ -517,13 +561,14 @@ namespace NiceHealthTabPatch
             }
         }
 
-        private static Texture2D Compose(Pawn pawn, PawnRenderNode head, List<PawnRenderNode> nodes, List<PawnRenderNode> bodyNodes)
+        /// <summary>
+        /// Composites the pawn's drawn head addons; <paramref name="ears"/> tells whether any of them
+        /// sticks out of the head outline.
+        /// </summary>
+        private static Texture2D Compose(Pawn pawn, PawnRenderNode head, List<PawnRenderNode> nodes, List<PawnRenderNode> bodyNodes, out bool ears)
         {
-            PawnDrawParms parms = PawnDrawParms.DefaultFor(pawn);
-            parms.facing = Rot4.South;
-            parms.posture = PawnPosture.Standing;
-            parms.flags |= PawnRenderFlags.Portrait;
-            parms.flipHead = false;
+            ears = false;
+            PawnDrawParms parms = SouthPortraitParms(pawn);
 
             Rect? raceHead = RaceHeadBounds(pawn, head, parms, out float? faceLayer, out List<PawnRenderNode> faceNodes, out List<Layer> headLayers);
             if (!raceHead.HasValue)
@@ -542,13 +587,12 @@ namespace NiceHealthTabPatch
                 Rect? opaque = OpaqueBounds(layer.tex, layer.rect);
                 if (!opaque.HasValue)
                     continue;
-                float outside = OutsidePixelShare(layer, headLayers);
-                bool ear = outside >= OutsideShare;
+                bool ear = OutsidePixelShare(layer, headLayers) >= OutsideShare;
                 bool hair = drawHair && ColorChannel(node) == "hair";
-                if ((ear || hair) && seen.Add(addonPathField.GetValue(addonField.GetValue(node.Props)) as string ?? layer.tex.name))
+                if ((ear || hair) && seen.Add(AddonPath(node) ?? layer.tex.name))
                 {
                     layers.Add(layer);
-                    composedEars |= ear;
+                    ears |= ear;
                 }
             }
             layers.Sort((a, b) => a.layer.CompareTo(b.layer));
@@ -563,13 +607,13 @@ namespace NiceHealthTabPatch
                     continue;
                 layer.rect.position -= new Vector2(headOffset.x, headOffset.z);
                 Rect? opaque = OpaqueBounds(layer.tex, layer.rect);
-                if (!opaque.HasValue || opaque.Value.center.y <= raceHead.Value.yMin)
+                // Only addons wholly above the chin; one reaching below it is a tail.
+                if (!opaque.HasValue || opaque.Value.yMin <= raceHead.Value.yMin)
                     continue;
-                float outside = OutsidePixelShare(layer, headLayers);
-                if (outside >= OutsideShare && seen.Add(AddonPath(node) ?? layer.tex.name))
+                if (OutsidePixelShare(layer, headLayers) >= OutsideShare && seen.Add(AddonPath(node) ?? layer.tex.name))
                 {
                     bodyLayers.Add(layer);
-                    composedEars = true;
+                    ears = true;
                 }
             }
             bodyLayers.Sort((a, b) => a.layer.CompareTo(b.layer));
@@ -592,7 +636,6 @@ namespace NiceHealthTabPatch
                 scale = Mathf.Clamp(vanillaHead.Value.width / raceHead.Value.width, 0.5f, 3f);
                 shift = vanillaHead.Value.center - raceHead.Value.center * scale;
             }
-
 
             float canvasWorld = VanillaMeshSize * CanvasScale;
             return Composite(layers,
@@ -727,6 +770,9 @@ namespace NiceHealthTabPatch
         private static float OutsidePixelShare(Layer layer, List<Layer> headLayers)
         {
             Color32[] pixels = Pixels(layer.tex);
+            var headPixels = new Color32[headLayers.Count][];
+            for (int i = 0; i < headLayers.Count; i++)
+                headPixels[i] = Pixels(headLayers[i].tex);
             int w = layer.tex.width, h = layer.tex.height;
             int step = Mathf.Max(1, w / 128);
             int total = 0, outside = 0;
@@ -738,27 +784,30 @@ namespace NiceHealthTabPatch
                         continue;
                     total++;
                     var point = new Vector2(layer.rect.xMin + (x + 0.5f) / w * layer.rect.width, layer.rect.yMin + (y + 0.5f) / h * layer.rect.height);
-                    if (!headLayers.Exists(head => IsOpaqueAt(head, point)))
+                    bool covered = false;
+                    for (int i = 0; i < headLayers.Count && !covered; i++)
+                        covered = IsOpaqueAt(headLayers[i], headPixels[i], point);
+                    if (!covered)
                         outside++;
                 }
             }
             return total == 0 ? 0f : (float)outside / total;
         }
 
-        private static bool IsOpaqueAt(Layer layer, Vector2 point)
+        private static bool IsOpaqueAt(Layer layer, Color32[] pixels, Vector2 point)
         {
             if (!layer.rect.Contains(point))
                 return false;
             int w = layer.tex.width, h = layer.tex.height;
             int x = Mathf.Clamp((int)((point.x - layer.rect.xMin) / layer.rect.width * w), 0, w - 1);
             int y = Mathf.Clamp((int)((point.y - layer.rect.yMin) / layer.rect.height * h), 0, h - 1);
-            return Pixels(layer.tex)[y * w + x].a >= OpaqueAlpha;
+            return pixels[y * w + x].a >= OpaqueAlpha;
         }
 
         /// <summary>
         /// Share of <paramref name="r"/>'s area that lies outside <paramref name="inside"/>.
         /// </summary>
-        private static float OutsideShareOf(Rect r, Rect inside)
+        private static float OutsideAreaShare(Rect r, Rect inside)
         {
             float area = r.width * r.height;
             if (area <= 0f)
@@ -818,8 +867,16 @@ namespace NiceHealthTabPatch
 
         private static bool FindSpan(int[] counts, int minCount, out int first, out int last)
         {
-            first = Array.FindIndex(counts, c => c >= minCount);
-            last = Array.FindLastIndex(counts, c => c >= minCount);
+            first = -1;
+            last = -1;
+            for (int i = 0; i < counts.Length; i++)
+            {
+                if (counts[i] < minCount)
+                    continue;
+                if (first < 0)
+                    first = i;
+                last = i;
+            }
             return first >= 0;
         }
 

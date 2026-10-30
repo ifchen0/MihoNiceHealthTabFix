@@ -20,9 +20,9 @@ Small patches for [url=https://steamcommunity.com/sharedfiles/filedetails/?id=33
 
 [h2]Nice Health Tab: surgery menu from the part list[/h2]Right-clicking a body part in the list next to the doll opens the same surgery menu as clicking that part on the doll. The whole-body entry opens the whole-body surgeries.
 
-[h2]Nice Health Tab: alien race hair, ears and tail (experimental)[/h2][b]Cause:[/b] The doll only draws vanilla hair styles on its head. Races that turn vanilla hair styles off and wear their hair, ears and tail as Humanoid Alien Races body addons instead, such as Miho, get a bald doll without a tail.
+[h2]Nice Health Tab: alien race hair, ears and tail (experimental)[/h2][b]Cause:[/b] The doll only draws vanilla hair styles on its head. Ears, tails and non-vanilla hair that Humanoid Alien Races pawns wear as body addons (Miho, Ratkin, Weazel and so on) are missing.
 
-[b]Fix:[/b] For those races only, the hair and ears are now drawn on the doll head, fitted to its size, and recolored by health like vanilla hair. Hair that sits behind the face is left out. The tail is drawn behind the body in the healthy color, and switches when drafted like in game. On by default; can be turned off at the end of the Common tab in Nice Health Tab's mod settings. Only in the default health tab view, not the legacy one.
+[b]Fix:[/b] Those addons are read from each pawn and drawn on the doll, recolored by health like vanilla hair: parts sticking out of the head outline (ears, horns) on the head, and parts sticking out of the body below the chin (tails) behind the body. Races that turn vanilla hair styles off (Miho) also get their addon hair; pawns with a vanilla style, bald included, keep Nice Health Tab's hair. Races with their own Nice Health Tab doll are left alone. Parts are picked by shape only, so some races may look off; it is on by default and can be turned off at the end of the Common tab in Nice Health Tab's mod settings. Only in the default health tab view, not the legacy one.
 
 [h2]Miho: missile turret error on load[/h2][b]Cause:[/b] Miho's missile turret gun gets [i]CompEquippable[/i] twice (its own comps plus the inherited one), so loading a save logs [i]Exception registering Verse.Verb_Shoot ... An item with the same key has already been added[/i] once per missile turret.
 

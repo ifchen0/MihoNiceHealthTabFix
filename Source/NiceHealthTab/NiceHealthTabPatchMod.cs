@@ -67,7 +67,7 @@ namespace NiceHealthTabPatch
                 bool before = Settings.alienHeadOverlay;
                 list.CheckboxLabeled("(Experimental) Draw alien race hair, ears and tail on the doll",
                     ref Settings.alienHeadOverlay,
-                    "Draws the hair, ears and tail of Humanoid Alien Races pawns whose race does not use vanilla hair styles (for example Miho). Added by Nice Health Tab & Miho Fixes.");
+                    "Draws the ears and tail that Humanoid Alien Races pawns wear as body addons (for example Miho, Ratkin), and their hair when the race does not use vanilla hair styles. Races with their own Nice Health Tab doll are left alone. Added by Nice Health Tab & Miho Fixes.");
                 if (before != Settings.alienHeadOverlay)
                 {
                     AlienHeadOverlay.ClearCache();

@@ -10,32 +10,42 @@ using Verse;
 namespace NiceHealthTabPatch
 {
     /// <summary>
-    /// Draws the hair-colored addons of Humanoid Alien Races pawns on the doll: hair and ears on the
-    /// head, and the tail behind the body. Experimental; one switch in Nice Health Tab's settings.
+    /// Draws Humanoid Alien Races body addons on the doll: hair and ears on the head, and the tail
+    /// behind the body. Experimental; one switch in Nice Health Tab's settings.
     /// </summary>
     /// <remarks>
-    /// Nice Health Tab only draws the hair and beard style icons, so a race that wears its hair and
-    /// ears as HAR body addons (Miho) shows a bald doll. Only races whose HAR style settings turn
-    /// vanilla hair styles off are handled, so a pawn wearing a vanilla style (bald included) is
-    /// left to Nice Health Tab. The head addons with the "hair" color
-    /// channel are taken from the pawn's render tree with their south-facing portrait size, offset
-    /// and layer, composited into one cached texture and drawn with Nice Health Tab's hair material.
-    /// The overlay rect was made for vanilla hair, so the race head (the head graphic plus the "skin"
-    /// head addons) is fitted to a vanilla head by the width and center of their opaque bounds.
-    /// Addon conditions (posture, drafted, hiding apparel) are ignored and of the addons sharing a
-    /// base path only the first is drawn: Miho repeats each hair addon for standing and lying (the
-    /// two copies can roll different variants), and the doll shows hair under headgear like Nice
-    /// Health Tab does.
+    /// Nice Health Tab only draws the hair and beard style icons, so races that wear hair, ears or a
+    /// tail as HAR body addons (Miho, Ratkin) lose them on the doll. Pawns whose xenotype has its own
+    /// Nice Health Tab doll are skipped, since that doll already draws them.
     ///
-    /// Tails are the hair-colored addons on the body. They are drawn before the doll, so the body and
-    /// its outline cover the root, in the healthy part color (a race on the human body has no tail
-    /// part). Their conditions are checked, since Miho swaps tails when drafted. The race body is
-    /// fitted to the doll by the chin-to-feet span: the race chin is the bottom of the head bounds
-    /// above, the doll chin the bottom of the vanilla head in the overlay rect, and the feet are the
-    /// bottoms of the body graphic and of the doll outline. The tail size is not taken from the race,
-    /// though: Miho's chibi tail is nearly as long as its body, and a child's even longer, which looks
-    /// huge on the realistic doll. Tails are scaled around the center of the race body so their
-    /// opaque height is <see cref="TailLength"/> of the doll's chin-to-feet span.
+    /// Head: the race head is the head graphic, or when that is blank (Miho) the "skin" head addons
+    /// covering the head center (the face). The candidates are the head addons plus the drawable body
+    /// addons above the chin (Weazel's ears are body addons). Those whose opaque pixels lie mostly
+    /// off the race head's opaque pixels extend its outline (ears, horns) and are drawn for any race;
+    /// pixels rather than bounds, since ears on a round head sit in the corners of its bounds; nothing tells an ear from
+    /// other headgear, so the rule is purely the outline. Addons with the "hair" color channel are
+    /// hair and are drawn only for races whose HAR style settings turn vanilla hair styles off, so a
+    /// pawn wearing a vanilla style (bald included) keeps Nice Health Tab's hair. Addons layered behind the face
+    /// (Miho's back hair) are left out. The addons are taken from the pawn's render tree with their
+    /// south-facing portrait size, offset and layer, composited into one cached texture and drawn with
+    /// Nice Health Tab's hair material. The overlay rect was made for vanilla hair: when Nice Health
+    /// Tab draws the pawn's vanilla hair there, the addons follow the same scale (the race hair mesh
+    /// mapped onto the overlay rect), so ears keep their size next to that hair (Ratkin's small face
+    /// would otherwise blow them up); otherwise the race head is fitted to a vanilla head by the
+    /// width and center of their opaque bounds. Addon conditions
+    /// (posture, drafted, hiding apparel) are ignored and of the addons sharing a base path only the
+    /// first is drawn: Miho repeats each addon for standing and lying (the two copies can roll
+    /// different variants), and the doll shows hair under headgear like Nice Health Tab does.
+    ///
+    /// Tail: the body addons that lie mostly outside the body graphic and below the chin. They are
+    /// drawn before the doll, so the body and its outline cover the root, in the healthy part color
+    /// (a race on the human body has no tail part). Their conditions are checked, since Miho swaps
+    /// tails when drafted. The race body is fitted to the doll by the chin-to-feet span: the race chin
+    /// is the bottom of the race head, the doll chin the bottom of the vanilla head in the overlay
+    /// rect, and the feet are the bottoms of the body graphic and of the doll outline. The tail size
+    /// is not taken from the race, though: Miho's chibi tail is nearly as long as its body, and a
+    /// child's even longer, which looks huge on the realistic doll. Tails are scaled around the center
+    /// of the race body so their opaque height is <see cref="TailLength"/> of the doll's chin-to-feet span.
     /// </remarks>
     [StaticConstructorOnStartup]
     public static class AlienHeadOverlay
@@ -47,6 +57,8 @@ namespace NiceHealthTabPatch
         private const float CanvasScale = 2f;
         private const int CanvasPixels = 512;
         private const byte OpaqueAlpha = 32;
+        // Share of an addon's opaque bounds outside the head or body for it to count as an ear or tail.
+        private const float OutsideShare = 0.5f;
 
         private static readonly FieldInfo addonField;
         private static readonly FieldInfo addonPathField;
@@ -80,7 +92,8 @@ namespace NiceHealthTabPatch
         private static readonly System.Text.StringBuilder keyBuilder = new System.Text.StringBuilder();
         private sealed class TailInfo
         {
-            public List<Layer> layers;   // rects in world units around the body center, y up
+            public Texture2D tex;        // grayscale composite of the tail layers
+            public Rect texRect;         // world units around the body center, y up
             public float chin, feet, centerX;
             public Vector2 bodyCenter;
             public float tailHeight;     // opaque height of the tail layers
@@ -93,6 +106,7 @@ namespace NiceHealthTabPatch
         private static readonly List<PawnRenderNode> tailNodes = new List<PawnRenderNode>();
         private static readonly Dictionary<Texture, Color32[]> pixelCache = new Dictionary<Texture, Color32[]>();
         private static readonly List<PawnRenderNode> hairNodes = new List<PawnRenderNode>();
+        private static readonly List<PawnRenderNode> bodyHeadNodes = new List<PawnRenderNode>();
         private static readonly Dictionary<ThingDef, bool> noVanillaHairRaces = new Dictionary<ThingDef, bool>();
         private static Game cacheGame;
         private static Rect? vanillaHeadBounds;
@@ -134,13 +148,19 @@ namespace NiceHealthTabPatch
                     UnityEngine.Object.Destroy(overlay.tex);
             }
             overlays.Clear();
+            foreach (TailInfo tail in tails.Values)
+            {
+                if (tail?.tex != null)
+                    UnityEngine.Object.Destroy(tail.tex);
+            }
             tails.Clear();
             pixelCache.Clear();
         }
 
         private static void DrawHeadOverlayPostfix(DollRenderContext ctx, Pawn pawn, Rect overlayRect, DollBodyPartDef part, DollPartStatus status)
         {
-            if (failed || pawn == null || !NiceHealthTabPatchMod.Settings.alienHeadOverlay || !NiceHediffTabSettings.ShowHair)
+            if (failed || pawn == null || !NiceHealthTabPatchMod.Settings.alienHeadOverlay || !NiceHediffTabSettings.ShowHair
+                || HasOwnDoll(ctx.MainDoll, pawn))
                 return;
             try
             {
@@ -172,7 +192,8 @@ namespace NiceHealthTabPatch
         {
             Pawn pawn = ctx?.Pawn;
             if (failed || pawn == null || !NiceHealthTabPatchMod.Settings.alienHeadOverlay
-                || !(doll is HumanlikeDoll humanlike) || humanlike.headPart == null || doll.outlineTex == null)
+                || !(doll is HumanlikeDoll humanlike) || humanlike.headPart == null || doll.outlineTex == null
+                || HasOwnDoll(doll, pawn))
                 return;
             try
             {
@@ -191,20 +212,26 @@ namespace NiceHealthTabPatch
                 if (scale <= 0f || float.IsNaN(scale))
                     return;
                 hairMaterial = hairMaterial ?? (Material)hairMaterialField.GetValue(null);
-                foreach (Layer layer in info.layers)
-                {
-                    float shrink = TailLength * (info.chin - info.feet) / info.tailHeight;
-                    Rect r = new Rect(info.bodyCenter + (layer.rect.position - info.bodyCenter) * shrink, layer.rect.size * shrink);
-                    var screen = new Rect(overlayRect.center.x + (r.xMin - info.centerX) * scale, chinY + (info.chin - r.yMax) * scale,
-                        r.width * scale, r.height * scale);
-                    drawHairClipped(ctx, screen, layer.tex, hairMaterial, Color.white);
-                }
+                float shrink = TailLength * (info.chin - info.feet) / info.tailHeight;
+                Rect r = new Rect(info.bodyCenter + (info.texRect.position - info.bodyCenter) * shrink, info.texRect.size * shrink);
+                var screen = new Rect(overlayRect.center.x + (r.xMin - info.centerX) * scale, chinY + (info.chin - r.yMax) * scale,
+                    r.width * scale, r.height * scale);
+                drawHairClipped(ctx, screen, info.tex, hairMaterial, Color.white);
             }
             catch (Exception e)
             {
                 failed = true;
                 Log.Error("[NiceHealthTabPatch] Alien tail overlay failed and the alien overlays are turned off until restart: " + e);
             }
+        }
+
+        /// <summary>
+        /// Whether Nice Health Tab picked a doll made for the pawn's xenotype rather than its default one.
+        /// </summary>
+        private static bool HasOwnDoll(Doll doll, Pawn pawn)
+        {
+            string xenotype = pawn.genes?.Xenotype?.defName;
+            return doll != null && xenotype != null && doll.xenotype == xenotype;
         }
 
         /// <summary>
@@ -218,8 +245,6 @@ namespace NiceHealthTabPatch
                 ClearCache();
                 cacheGame = Current.Game;
             }
-            if (!HasNoVanillaHair(pawn.def))
-                return null;
             PawnRenderTree tree = pawn.Drawer?.renderer?.renderTree;
             if (tree == null || !tree.Resolved
                 || !tree.TryGetNodeByTag(PawnRenderNodeTagDefOf.Body, out PawnRenderNode body)
@@ -227,15 +252,7 @@ namespace NiceHealthTabPatch
                 return null;
 
             tailNodes.Clear();
-            foreach (PawnRenderNode child in body.children ?? Array.Empty<PawnRenderNode>())
-            {
-                if (child == head || !addonPropsType.IsInstanceOfType(child.Props))
-                    continue;
-                object addon = addonField.GetValue(child.Props);
-                if (colorChannelProperty.GetValue(addon) as string == "hair" && child.GraphicFor(pawn) != null
-                    && (bool)canDrawAddonMethod.Invoke(addon, new object[] { pawn }))
-                    tailNodes.Add(child);
-            }
+            CollectDrawableBodyAddons(body, head, pawn, tailNodes);
             if (tailNodes.Count == 0)
                 return null;
             keyBuilder.Clear().Append(pawn.def.defName);
@@ -252,7 +269,14 @@ namespace NiceHealthTabPatch
             info = MeasureTail(pawn, body, head, tailNodes);
             pixelCache.Clear();
             if (tails.Count >= MaxCachedTails)
+            {
+                foreach (TailInfo tail in tails.Values)
+                {
+                    if (tail?.tex != null)
+                        UnityEngine.Object.Destroy(tail.tex);
+                }
                 tails.Clear();
+            }
             tails[key] = info;
             return info;
         }
@@ -267,7 +291,7 @@ namespace NiceHealthTabPatch
 
             Layer bodyLayer = LayerFor(body, pawn, parms);
             Layer headLayer = LayerFor(head, pawn, parms);
-            Rect? raceHead = RaceHeadBounds(pawn, head, parms, out _);
+            Rect? raceHead = RaceHeadBounds(pawn, head, parms, out _, out _, out _);
             if (bodyLayer == null || headLayer == null || !raceHead.HasValue)
                 return null;
             bodyLayer.rect.center = Vector2.zero;
@@ -277,7 +301,6 @@ namespace NiceHealthTabPatch
             Vector2 headCenter = headLayer.rect.center;
             var info = new TailInfo
             {
-                layers = new List<Layer>(),
                 chin = headCenter.y + raceHead.Value.yMin,
                 feet = bodyBounds.Value.yMin,
                 centerX = headCenter.x,
@@ -285,20 +308,27 @@ namespace NiceHealthTabPatch
             };
             if (info.chin - info.feet <= 0.01f)
                 return null;
+            var layers = new List<Layer>();
             Rect? tailBounds = null;
+            Rect? texRect = null;
             foreach (PawnRenderNode node in nodes)
             {
                 Layer layer = LayerFor(node, pawn, parms);
                 Rect? opaque = layer == null ? null : OpaqueBounds(layer.tex, layer.rect);
-                if (!opaque.HasValue)
+                // Only what sticks out of the body below the chin is a tail (Miho also has lying head addons on the body).
+                bool tail = opaque.HasValue && opaque.Value.center.y < info.chin && OutsideShareOf(opaque.Value, bodyBounds.Value) >= OutsideShare;
+                if (!tail)
                     continue;
-                info.layers.Add(layer);
+                layers.Add(layer);
                 tailBounds = tailBounds.HasValue ? Union(tailBounds.Value, opaque.Value) : opaque.Value;
+                texRect = texRect.HasValue ? Union(texRect.Value, layer.rect) : layer.rect;
             }
             if (!tailBounds.HasValue || tailBounds.Value.height <= 0.01f)
                 return null;
             info.tailHeight = tailBounds.Value.height;
-            info.layers.Sort((a, b) => a.layer.CompareTo(b.layer));
+            info.texRect = texRect.Value;
+            layers.Sort((a, b) => a.layer.CompareTo(b.layer));
+            info.tex = Composite(layers, r => r, info.texRect);
             return info;
         }
 
@@ -332,20 +362,25 @@ namespace NiceHealthTabPatch
                 ClearCache();
                 cacheGame = Current.Game;
             }
-            if (!HasNoVanillaHair(pawn.def))
-                return null;
             PawnRenderTree tree = pawn.Drawer?.renderer?.renderTree;
             if (tree == null || !tree.Resolved || !tree.TryGetNodeByTag(PawnRenderNodeTagDefOf.Head, out PawnRenderNode head))
                 return null;
 
             hairNodes.Clear();
-            CollectAddons(head, pawn, "hair", hairNodes);
-            if (hairNodes.Count == 0)
+            CollectAddons(head, pawn, null, hairNodes);
+            bodyHeadNodes.Clear();
+            if (tree.TryGetNodeByTag(PawnRenderNodeTagDefOf.Body, out PawnRenderNode body))
+                CollectDrawableBodyAddons(body, head, pawn, bodyHeadNodes);
+            if (hairNodes.Count == 0 && bodyHeadNodes.Count == 0)
                 return null;
             keyBuilder.Clear().Append(pawn.def.defName);
             foreach (PawnRenderNode node in hairNodes)
                 keyBuilder.Append('|').Append(node.GraphicFor(pawn).path);
+            keyBuilder.Append("|body");
+            foreach (PawnRenderNode node in bodyHeadNodes)
+                keyBuilder.Append('|').Append(node.GraphicFor(pawn).path);
             keyBuilder.Append('|').Append(pawn.story?.headType?.defName)
+                .Append('|').Append(pawn.story?.hairDef?.defName)
                 .Append('|').Append(pawn.story?.bodyType?.defName)
                 .Append('|').Append((int)pawn.gender)
                 .Append('|').Append(HumanlikeMeshPoolUtility.HumanlikeHeadWidthForPawn(pawn).ToString("F3"));
@@ -353,7 +388,7 @@ namespace NiceHealthTabPatch
 
             if (!overlays.TryGetValue(key, out CachedOverlay cached))
             {
-                cached = new CachedOverlay { tex = Compose(pawn, head, hairNodes) };
+                cached = new CachedOverlay { tex = Compose(pawn, head, hairNodes, bodyHeadNodes) };
                 // Source pixels are only needed while composing; keeping them would grow with every style seen.
                 pixelCache.Clear();
                 overlays[key] = cached;
@@ -398,6 +433,23 @@ namespace NiceHealthTabPatch
             return result;
         }
 
+        /// <summary>
+        /// Collects the body's own HAR addons (not the head's) that have a graphic and pass their conditions.
+        /// </summary>
+        private static void CollectDrawableBodyAddons(PawnRenderNode body, PawnRenderNode head, Pawn pawn, List<PawnRenderNode> result)
+        {
+            foreach (PawnRenderNode child in body.children ?? Array.Empty<PawnRenderNode>())
+            {
+                if (child == head || !addonPropsType.IsInstanceOfType(child.Props) || child.GraphicFor(pawn) == null)
+                    continue;
+                if ((bool)canDrawAddonMethod.Invoke(addonField.GetValue(child.Props), new object[] { pawn }))
+                    result.Add(child);
+            }
+        }
+
+        /// <summary>
+        /// Collects the HAR addons below <paramref name="node"/> with a graphic, of one color channel or any when null.
+        /// </summary>
         private static void CollectAddons(PawnRenderNode node, Pawn pawn, string colorChannel, List<PawnRenderNode> result)
         {
             if (node.children == null)
@@ -405,14 +457,14 @@ namespace NiceHealthTabPatch
             foreach (PawnRenderNode child in node.children)
             {
                 if (addonPropsType.IsInstanceOfType(child.Props)
-                    && colorChannelProperty.GetValue(addonField.GetValue(child.Props)) as string == colorChannel
+                    && (colorChannel == null || ColorChannel(child) == colorChannel)
                     && child.GraphicFor(pawn) != null)
                     result.Add(child);
                 CollectAddons(child, pawn, colorChannel, result);
             }
         }
 
-        private static Texture2D Compose(Pawn pawn, PawnRenderNode head, List<PawnRenderNode> nodes)
+        private static Texture2D Compose(Pawn pawn, PawnRenderNode head, List<PawnRenderNode> nodes, List<PawnRenderNode> bodyNodes)
         {
             PawnDrawParms parms = PawnDrawParms.DefaultFor(pawn);
             parms.facing = Rot4.South;
@@ -420,43 +472,100 @@ namespace NiceHealthTabPatch
             parms.flags |= PawnRenderFlags.Portrait;
             parms.flipHead = false;
 
-            Rect? raceHead = RaceHeadBounds(pawn, head, parms, out float? faceLayer);
+            Rect? raceHead = RaceHeadBounds(pawn, head, parms, out float? faceLayer, out List<PawnRenderNode> faceNodes, out List<Layer> headLayers);
+            if (!raceHead.HasValue)
+                return null;
+            bool drawHair = HasNoVanillaHair(pawn.def);
             var layers = new List<Layer>();
             var seen = new HashSet<string>();
             foreach (PawnRenderNode node in nodes)
             {
+                if (faceNodes.Contains(node))
+                    continue;
                 Layer layer = LayerFor(node, pawn, parms);
-                // Hair drawn behind the face (Miho's back hair) would cover the doll head.
-                if (layer != null && !(layer.layer < faceLayer) && seen.Add(addonPathField.GetValue(addonField.GetValue(node.Props)) as string ?? layer.tex.name))
+                // Addons behind the face (Miho's back hair) would cover the doll head.
+                if (layer == null || layer.layer < faceLayer)
+                    continue;
+                Rect? opaque = OpaqueBounds(layer.tex, layer.rect);
+                if (!opaque.HasValue)
+                    continue;
+                float outside = OutsidePixelShare(layer, headLayers);
+                bool ear = outside >= OutsideShare;
+                bool hair = drawHair && ColorChannel(node) == "hair";
+                if ((ear || hair) && seen.Add(addonPathField.GetValue(addonField.GetValue(node.Props)) as string ?? layer.tex.name))
                     layers.Add(layer);
             }
-            if (layers.Count == 0)
-                return null;
             layers.Sort((a, b) => a.layer.CompareTo(b.layer));
 
-            // Fit the race head onto the vanilla head the overlay rect was made for.
+            // Body addons placed at the head; their layers are in the body's frame, so they go behind.
+            Vector3 headOffset = head.Worker.OffsetFor(head, parms, out _);
+            var bodyLayers = new List<Layer>();
+            foreach (PawnRenderNode node in bodyNodes)
+            {
+                Layer layer = LayerFor(node, pawn, parms);
+                if (layer == null)
+                    continue;
+                layer.rect.position -= new Vector2(headOffset.x, headOffset.z);
+                Rect? opaque = OpaqueBounds(layer.tex, layer.rect);
+                if (!opaque.HasValue || opaque.Value.center.y <= raceHead.Value.yMin)
+                    continue;
+                float outside = OutsidePixelShare(layer, headLayers);
+                if (outside >= OutsideShare && seen.Add(AddonPath(node) ?? layer.tex.name))
+                    bodyLayers.Add(layer);
+            }
+            bodyLayers.Sort((a, b) => a.layer.CompareTo(b.layer));
+            layers.InsertRange(0, bodyLayers);
+            if (layers.Count == 0)
+                return null;
+
+            // Follow the vanilla hair Nice Health Tab draws, or fit the race head onto the vanilla head.
             float scale = 1f;
             Vector2 shift = Vector2.zero;
             Rect? vanillaHead = VanillaHeadBounds();
-            if (raceHead.HasValue && vanillaHead.HasValue && raceHead.Value.width > 0.01f)
+            Rect? hairMesh = drawHair ? null : HairMeshRect(head, parms);
+            if (hairMesh.HasValue && hairMesh.Value.width > 0.01f)
+            {
+                scale = VanillaMeshSize / hairMesh.Value.width;
+                shift = -hairMesh.Value.center * scale;
+            }
+            else if (vanillaHead.HasValue && raceHead.Value.width > 0.01f)
             {
                 scale = Mathf.Clamp(vanillaHead.Value.width / raceHead.Value.width, 0.5f, 3f);
                 shift = vanillaHead.Value.center - raceHead.Value.center * scale;
             }
 
-            var canvas = new Color[CanvasPixels * CanvasPixels];
+
             float canvasWorld = VanillaMeshSize * CanvasScale;
+            return Composite(layers,
+                r => Rect.MinMaxRect(r.xMin * scale + shift.x, r.yMin * scale + shift.y, r.xMax * scale + shift.x, r.yMax * scale + shift.y),
+                new Rect(-canvasWorld / 2f, -canvasWorld / 2f, canvasWorld, canvasWorld));
+        }
+
+        /// <summary>
+        /// Alpha-blends the layers, in order and in grayscale, into a texture covering
+        /// <paramref name="canvasWorld"/>; <paramref name="place"/> maps a layer rect into that space.
+        /// </summary>
+        /// <remarks>
+        /// Nice Health Tab's hair material tints the texture with the part color, which only works on
+        /// gray art like vanilla hair; some races' ears and tails are colored (Ratkin, Weazel).
+        /// </remarks>
+        private static Texture2D Composite(List<Layer> layers, Func<Rect, Rect> place, Rect canvasWorld)
+        {
+            int w = CanvasPixels, h = CanvasPixels;
+            if (canvasWorld.width > canvasWorld.height)
+                h = Mathf.Max(1, Mathf.RoundToInt(CanvasPixels * canvasWorld.height / canvasWorld.width));
+            else
+                w = Mathf.Max(1, Mathf.RoundToInt(CanvasPixels * canvasWorld.width / canvasWorld.height));
+            var canvas = new Color[w * h];
             foreach (Layer layer in layers)
             {
-                Rect r = layer.rect;
-                Rect fitted = Rect.MinMaxRect(r.xMin * scale + shift.x, r.yMin * scale + shift.y, r.xMax * scale + shift.x, r.yMax * scale + shift.y);
+                Rect r = place(layer.rect);
                 Rect pixels = Rect.MinMaxRect(
-                    (fitted.xMin / canvasWorld + 0.5f) * CanvasPixels, (fitted.yMin / canvasWorld + 0.5f) * CanvasPixels,
-                    (fitted.xMax / canvasWorld + 0.5f) * CanvasPixels, (fitted.yMax / canvasWorld + 0.5f) * CanvasPixels);
-                DrawLayer(canvas, Pixels(layer.tex), layer.tex.width, layer.tex.height, pixels);
+                    (r.xMin - canvasWorld.xMin) / canvasWorld.width * w, (r.yMin - canvasWorld.yMin) / canvasWorld.height * h,
+                    (r.xMax - canvasWorld.xMin) / canvasWorld.width * w, (r.yMax - canvasWorld.yMin) / canvasWorld.height * h);
+                DrawLayer(canvas, w, h, Pixels(layer.tex), layer.tex.width, layer.tex.height, pixels);
             }
-
-            var tex = new Texture2D(CanvasPixels, CanvasPixels, TextureFormat.RGBA32, true)
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, true)
             {
                 filterMode = FilterMode.Trilinear,
                 wrapMode = TextureWrapMode.Clamp,
@@ -464,6 +573,33 @@ namespace NiceHealthTabPatch
             tex.SetPixels(canvas);
             tex.Apply(true, true);
             return tex;
+        }
+
+        private static string AddonPath(PawnRenderNode node) =>
+            addonPathField.GetValue(addonField.GetValue(node.Props)) as string;
+
+        /// <summary>
+        /// Where the render tree draws the pawn's vanilla hair, relative to the head; null without a hair node.
+        /// </summary>
+        private static Rect? HairMeshRect(PawnRenderNode node, PawnDrawParms parms)
+        {
+            foreach (PawnRenderNode child in node.children ?? Array.Empty<PawnRenderNode>())
+            {
+                if (child is PawnRenderNode_Hair && child.Worker != null)
+                {
+                    Mesh mesh = child.GetMesh(parms);
+                    if (mesh == null)
+                        return null;
+                    Vector3 offset = child.Worker.OffsetFor(child, parms, out _);
+                    Vector3 scale = child.Worker.ScaleFor(child, parms);
+                    float w = mesh.bounds.size.x * scale.x, h = mesh.bounds.size.z * scale.z;
+                    return new Rect(offset.x - w / 2f, offset.z - h / 2f, w, h);
+                }
+                Rect? found = HairMeshRect(child, parms);
+                if (found.HasValue)
+                    return found;
+            }
+            return null;
         }
 
         /// <summary>
@@ -488,31 +624,93 @@ namespace NiceHealthTabPatch
         }
 
         /// <summary>
-        /// Opaque bounds of the race head in world units around the head center: the head graphic
-        /// (blank for Miho) and the head addons with the "skin" color channel (Miho's face).
-        /// <paramref name="faceLayer"/> is the top layer of those addons, null when there are none.
+        /// Opaque bounds of the race head in world units around the head center: the head graphic, or
+        /// when that is blank (Miho) the "skin" head addons covering the head center (the face).
+        /// <paramref name="faceLayer"/> is the top layer of those face addons, null when there are none.
         /// </summary>
-        private static Rect? RaceHeadBounds(Pawn pawn, PawnRenderNode head, PawnDrawParms parms, out float? faceLayer)
+        private static Rect? RaceHeadBounds(Pawn pawn, PawnRenderNode head, PawnDrawParms parms,
+            out float? faceLayer, out List<PawnRenderNode> faceNodes, out List<Layer> headLayers)
         {
-            var nodes = new List<PawnRenderNode> { head };
-            CollectAddons(head, pawn, "skin", nodes);
-            Rect? bounds = null;
             faceLayer = null;
-            foreach (PawnRenderNode node in nodes)
+            faceNodes = new List<PawnRenderNode>();
+            headLayers = new List<Layer>();
+            Layer headLayer = LayerFor(head, pawn, parms);
+            if (headLayer != null)
+            {
+                headLayer.rect.center = Vector2.zero;
+                Rect? headBounds = OpaqueBounds(headLayer.tex, headLayer.rect);
+                if (headBounds.HasValue)
+                {
+                    headLayers.Add(headLayer);
+                    return headBounds;
+                }
+            }
+            var skinNodes = new List<PawnRenderNode>();
+            CollectAddons(head, pawn, "skin", skinNodes);
+            Rect? bounds = null;
+            foreach (PawnRenderNode node in skinNodes)
             {
                 Layer layer = LayerFor(node, pawn, parms);
-                if (layer == null)
+                Rect? opaque = layer == null ? null : OpaqueBounds(layer.tex, layer.rect);
+                if (!opaque.HasValue || !opaque.Value.Contains(Vector2.zero))
                     continue;
-                if (node == head)
-                    layer.rect.center = Vector2.zero;
-                else
-                    faceLayer = Mathf.Max(faceLayer ?? layer.layer, layer.layer);
-                Rect? opaque = OpaqueBounds(layer.tex, layer.rect);
-                if (opaque.HasValue)
-                    bounds = bounds.HasValue ? Union(bounds.Value, opaque.Value) : opaque.Value;
+                faceNodes.Add(node);
+                headLayers.Add(layer);
+                faceLayer = Mathf.Max(faceLayer ?? layer.layer, layer.layer);
+                bounds = bounds.HasValue ? Union(bounds.Value, opaque.Value) : opaque.Value;
             }
             return bounds;
         }
+
+        /// <summary>
+        /// Share of the layer's opaque pixels that do not cover an opaque pixel of any head layer.
+        /// </summary>
+        private static float OutsidePixelShare(Layer layer, List<Layer> headLayers)
+        {
+            Color32[] pixels = Pixels(layer.tex);
+            int w = layer.tex.width, h = layer.tex.height;
+            int step = Mathf.Max(1, w / 128);
+            int total = 0, outside = 0;
+            for (int y = 0; y < h; y += step)
+            {
+                for (int x = 0; x < w; x += step)
+                {
+                    if (pixels[y * w + x].a < OpaqueAlpha)
+                        continue;
+                    total++;
+                    var point = new Vector2(layer.rect.xMin + (x + 0.5f) / w * layer.rect.width, layer.rect.yMin + (y + 0.5f) / h * layer.rect.height);
+                    if (!headLayers.Exists(head => IsOpaqueAt(head, point)))
+                        outside++;
+                }
+            }
+            return total == 0 ? 0f : (float)outside / total;
+        }
+
+        private static bool IsOpaqueAt(Layer layer, Vector2 point)
+        {
+            if (!layer.rect.Contains(point))
+                return false;
+            int w = layer.tex.width, h = layer.tex.height;
+            int x = Mathf.Clamp((int)((point.x - layer.rect.xMin) / layer.rect.width * w), 0, w - 1);
+            int y = Mathf.Clamp((int)((point.y - layer.rect.yMin) / layer.rect.height * h), 0, h - 1);
+            return Pixels(layer.tex)[y * w + x].a >= OpaqueAlpha;
+        }
+
+        /// <summary>
+        /// Share of <paramref name="r"/>'s area that lies outside <paramref name="inside"/>.
+        /// </summary>
+        private static float OutsideShareOf(Rect r, Rect inside)
+        {
+            float area = r.width * r.height;
+            if (area <= 0f)
+                return 0f;
+            float w = Mathf.Max(0f, Mathf.Min(r.xMax, inside.xMax) - Mathf.Max(r.xMin, inside.xMin));
+            float h = Mathf.Max(0f, Mathf.Min(r.yMax, inside.yMax) - Mathf.Max(r.yMin, inside.yMin));
+            return 1f - w * h / area;
+        }
+
+        private static string ColorChannel(PawnRenderNode node) =>
+            colorChannelProperty.GetValue(addonField.GetValue(node.Props)) as string;
 
         private static Rect? VanillaHeadBounds()
         {
@@ -567,12 +765,12 @@ namespace NiceHealthTabPatch
         }
 
         /// <summary>
-        /// Alpha-blends a texture over the canvas into the given canvas pixel rect, with bilinear sampling.
+        /// Alpha-blends a texture in grayscale over the canvas into the given canvas pixel rect, with bilinear sampling.
         /// </summary>
-        private static void DrawLayer(Color[] canvas, Color32[] src, int srcW, int srcH, Rect dest)
+        private static void DrawLayer(Color[] canvas, int canvasW, int canvasH, Color32[] src, int srcW, int srcH, Rect dest)
         {
-            int x0 = Mathf.Max(0, Mathf.FloorToInt(dest.xMin)), x1 = Mathf.Min(CanvasPixels, Mathf.CeilToInt(dest.xMax));
-            int y0 = Mathf.Max(0, Mathf.FloorToInt(dest.yMin)), y1 = Mathf.Min(CanvasPixels, Mathf.CeilToInt(dest.yMax));
+            int x0 = Mathf.Max(0, Mathf.FloorToInt(dest.xMin)), x1 = Mathf.Min(canvasW, Mathf.CeilToInt(dest.xMax));
+            int y0 = Mathf.Max(0, Mathf.FloorToInt(dest.yMin)), y1 = Mathf.Min(canvasH, Mathf.CeilToInt(dest.yMax));
             for (int y = y0; y < y1; y++)
             {
                 float v = (y + 0.5f - dest.yMin) / dest.height;
@@ -586,7 +784,9 @@ namespace NiceHealthTabPatch
                     Color s = Sample(src, srcW, srcH, u, v);
                     if (s.a <= 0f)
                         continue;
-                    ref Color d = ref canvas[y * CanvasPixels + x];
+                    float gray = s.grayscale;
+                    s = new Color(gray, gray, gray, s.a);
+                    ref Color d = ref canvas[y * canvasW + x];
                     float a = s.a + d.a * (1f - s.a);
                     Color blended = (s * s.a + d * d.a * (1f - s.a)) / a;
                     blended.a = a;

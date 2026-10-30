@@ -107,6 +107,7 @@ namespace NiceHealthTabPatch
         private static readonly Dictionary<string, TailInfo> tails = new Dictionary<string, TailInfo>();
         private static readonly Dictionary<Texture, float> outlineBottoms = new Dictionary<Texture, float>();
         private static readonly List<PawnRenderNode> tailNodes = new List<PawnRenderNode>();
+        private static readonly List<PawnRenderNode> faceKeyNodes = new List<PawnRenderNode>();
         private static readonly Dictionary<Texture, Color32[]> pixelCache = new Dictionary<Texture, Color32[]>();
         private static readonly List<PawnRenderNode> hairNodes = new List<PawnRenderNode>();
         private static readonly List<PawnRenderNode> bodyHeadNodes = new List<PawnRenderNode>();
@@ -301,6 +302,12 @@ namespace NiceHealthTabPatch
                 return null;
             keyBuilder.Clear().Append(pawn.def.defName);
             foreach (PawnRenderNode node in tailNodes)
+                keyBuilder.Append('|').Append(node.GraphicFor(pawn).path);
+            // The chin comes from the face addons when the head graphic is blank (Miho).
+            faceKeyNodes.Clear();
+            CollectAddons(head, pawn, "skin", faceKeyNodes);
+            keyBuilder.Append("|face");
+            foreach (PawnRenderNode node in faceKeyNodes)
                 keyBuilder.Append('|').Append(node.GraphicFor(pawn).path);
             keyBuilder.Append('|').Append(pawn.story?.headType?.defName)
                 .Append('|').Append(pawn.story?.bodyType?.defName)

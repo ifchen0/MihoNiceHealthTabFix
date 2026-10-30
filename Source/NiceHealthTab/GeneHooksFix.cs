@@ -17,10 +17,12 @@ namespace NiceHealthTabPatch
     /// Nice Health Tab draws a gene part when the pawn's render tree has a node of a gene listed in
     /// OverlayGeneCache.GeneHooks. Its 1.7 assembly no longer stores the genes in GeneHooks in
     /// DollGenePart.PrepareBodyPart, and DollRenderer.DrawDoll keeps its gene layer local at null
-    /// instead of reading OverlayGeneCache.DollsLayers, so no gene part is ever drawn. Missing
-    /// GeneHooks entries are added once at startup, and the DollsLayers lookup is put back after the
-    /// null assignment. Both steps leave the 1.6 assembly, or a fixed release, alone. Replacement gene
-    /// parts (the pigskin nose) stay off: 1.7 also dropped the code that swaps them in.
+    /// instead of reading OverlayGeneCache.DollsLayers, so no gene part is ever drawn. The
+    /// DollsLayers lookup is put back after the null assignment, and only once that worked are the
+    /// missing GeneHooks entries added. Both steps leave the 1.6 assembly, or a fixed release, alone.
+    /// Replacement gene parts (the pigskin nose) are not registered: 1.7 dropped the code that swaps
+    /// them in, and an unregistered nose gene still reaches the doll head through Nice Health Tab's
+    /// gene overlay fallback, which a registered one would skip.
     /// </remarks>
     [StaticConstructorOnStartup]
     public static class GeneHooksFix
@@ -40,28 +42,43 @@ namespace NiceHealthTabPatch
                 Log.Warning("[NiceHealthTabPatch] Nice Health Tab gene part map not found; gene part fix skipped.");
                 return;
             }
-            int added = 0;
+            var missing = new List<(GeneDef, DollGenePart)>();
             foreach (DollGenePart part in DefDatabase<DollBodyPartDef>.AllDefs.OfType<DollGenePart>())
             {
                 GeneDef gene = part.geneDefName.NullOrEmpty() ? null : DefDatabase<GeneDef>.GetNamedSilentFail(part.geneDefName);
-                if (gene == null || hooks.ContainsKey(gene))
-                    continue;
-                hooks[gene] = part;
-                added++;
+                if (gene != null && !part.replace && !hooks.ContainsKey(gene))
+                    missing.Add((gene, part));
             }
-            if (added == 0)
+            if (missing.Count == 0)
                 return;
-            new Harmony("ifchen0.nicehealthtabpatch").Patch(AccessTools.Method(typeof(DollRenderer), nameof(DollRenderer.DrawDoll)),
-                transpiler: new HarmonyMethod(typeof(GeneHooksFix), nameof(DrawDollTranspiler)));
-            Log.Message($"[NiceHealthTabPatch] Registered {added} Nice Health Tab gene parts missing from its gene map"
-                + (layerLookupRestored ? " and restored its gene layers." : "; gene layer lookup not found, so they stay hidden."));
+            try
+            {
+                new Harmony("ifchen0.nicehealthtabpatch").Patch(AccessTools.Method(typeof(DollRenderer), nameof(DollRenderer.DrawDoll)),
+                    transpiler: new HarmonyMethod(typeof(GeneHooksFix), nameof(DrawDollTranspiler)));
+            }
+            catch (Exception e)
+            {
+                Log.Warning("[NiceHealthTabPatch] Nice Health Tab doll drawing could not be patched; gene part fix skipped. " + e.Message);
+                return;
+            }
+            if (!layerLookupRestored)
+            {
+                Log.Warning("[NiceHealthTabPatch] Nice Health Tab gene layer lookup not found; gene part fix skipped.");
+                return;
+            }
+            foreach ((GeneDef gene, DollGenePart part) in missing)
+                hooks[gene] = part;
+            Log.Message($"[NiceHealthTabPatch] Restored Nice Health Tab gene layers and registered {missing.Count} missing gene parts.");
         }
 
         private static IEnumerable<CodeInstruction> DrawDollTranspiler(IEnumerable<CodeInstruction> instructions, MethodBase original)
         {
             List<CodeInstruction> codes = instructions.ToList();
             if (codes.Any(c => c.LoadsField(dollsLayersField)))
+            {
+                layerLookupRestored = true;
                 return codes;
+            }
             Type containerType = dollsLayersField.FieldType.GetGenericArguments()[1];
             IList<LocalVariableInfo> locals = original.GetMethodBody()?.LocalVariables;
             for (int i = 0; i + 1 < codes.Count; i++)

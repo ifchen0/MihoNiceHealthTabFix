@@ -24,6 +24,10 @@ Small patches for [url=https://steamcommunity.com/sharedfiles/filedetails/?id=33
 
 [b]Fix:[/b] Those addons are read from each pawn and drawn on the doll, recolored by health like vanilla hair: parts sticking out of the head outline (ears, horns) on the head, and parts sticking out of the body below the chin (tails) behind the body. Races that turn vanilla hair styles off (Miho) also get their addon hair; pawns with a vanilla style, bald included, keep Nice Health Tab's hair. Races with their own Nice Health Tab doll are left alone. Parts are picked by shape only, so some races may look off; it is on by default and can be turned off at the end of the Common tab in Nice Health Tab's mod settings. Only in the default health tab view, not the legacy one.
 
+[h2]Nice Health Tab: gene parts missing on RimWorld 1.7[/h2][b]Cause:[/b] Nice Health Tab's RimWorld 1.7 build neither registers its gene doll parts nor draws its gene layers, so the Yttakin furry tail is missing on 1.7.
+
+[b]Fix:[/b] The gene parts are registered and the gene layers drawn again. The pigskin nose stays as it is, since 1.7 also dropped the code that swaps it in. Does nothing on 1.6 or once Nice Health Tab fixes it.
+
 [h2]Miho: missile turret error on load[/h2][b]Cause:[/b] Miho's missile turret gun gets [i]CompEquippable[/i] twice (its own comps plus the inherited one), so loading a save logs [i]Exception registering Verse.Verb_Shoot ... An item with the same key has already been added[/i] once per missile turret.
 
 [b]Fix:[/b] An XML patch removes the extra copy. Existing saves load fine and are cleaned up the next time they are saved.

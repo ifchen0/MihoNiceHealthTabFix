@@ -39,16 +39,21 @@ namespace NiceHealthTabPatch
     /// the pawn gets such outline addons, the doll head and outline are swapped for copies without
     /// the human ears (<see cref="EarlessHead"/>) while the doll is drawn, so it does not show four ears.
     ///
-    /// Tail: the body addons that lie mostly outside the body graphic and reach below the chin (Miho's
-    /// drafted tail points up, so its center is above the chin but its root is not). They are
+    /// Tail: the body addons that lie mostly outside the body graphic and reach below the chin (a raised
+    /// tail can have its center above the chin, but not its bottom). They are
     /// drawn before the doll, so the body and its outline cover the root, in the healthy part color
-    /// (a race on the human body has no tail part). Their conditions are checked, since Miho swaps
-    /// tails when drafted. The race body is fitted to the doll by the chin-to-feet span: the race chin
+    /// (a race on the human body has no tail part). Their conditions are checked as if the pawn were
+    /// not drafted: Miho swaps to a raised tail when drafted, which sits behind the body and looks like
+    /// a cape on the doll. The race body is fitted to the doll by the chin-to-feet span: the race chin
     /// is the bottom of the race head, the doll chin the bottom of the vanilla head in the overlay
-    /// rect, and the feet are the bottoms of the body graphic and of the doll outline. The tail size
-    /// is not taken from the race, though: Miho's chibi tail is nearly as long as its body, and a
-    /// child's even longer, which looks huge on the realistic doll. Tails are scaled around the center
-    /// of the race body so their opaque height is <see cref="TailLength"/> of the doll's chin-to-feet span.
+    /// rect, and the feet are the bottoms of the body graphic and of the doll outline. That span only
+    /// sets the scale and the horizontal place. Neither the tail size nor its height is taken from the
+    /// race, since the race art is drawn for its own (often chibi) body: Miho's tail is nearly as long
+    /// as its body, a child's even longer, and a child's short legs put its hips near the doll's knees.
+    /// Tails are scaled around the center of the race body so their opaque height is
+    /// <see cref="TailLength"/> of the doll's chin-to-feet span, and their opaque top is put at the
+    /// doll's hips (<see cref="HipY"/>), so every tail on a doll takes the same height band. Guessing the root from the art (where the body
+    /// covers the tail) moved tails up or down by how much of each tail the race's legs hide.
     /// </remarks>
     [StaticConstructorOnStartup]
     public static class AlienAddonOverlay
@@ -68,6 +73,8 @@ namespace NiceHealthTabPatch
         private static readonly PropertyInfo colorChannelProperty;
         private static readonly MethodInfo canDrawAddonMethod;
         private static readonly object[] canDrawArgs = new object[1];
+        private static readonly AccessTools.FieldRef<Pawn_DraftController, bool> draftedField =
+            AccessTools.FieldRefAccess<Pawn_DraftController, bool>("draftedInt");
         private static readonly Type addonPropsType;
         private static readonly Action<DollRenderContext, Rect, Texture2D, Material, Color> drawHairClipped;
         private static readonly FieldInfo hairMaterialField;
@@ -102,12 +109,15 @@ namespace NiceHealthTabPatch
             public float chin, feet, centerX;
             public Vector2 bodyCenter;
             public float tailHeight;     // opaque height of the tail layers
+            public float tailTop;        // opaque top of the tail layers
         }
 
         private const int MaxCachedTails = 64;
         private const float TailLength = 0.5f;
         private static readonly Dictionary<string, TailInfo> tails = new Dictionary<string, TailInfo>();
         private static readonly Dictionary<Texture, float> outlineBottoms = new Dictionary<Texture, float>();
+        private static readonly Dictionary<Texture, float> opaqueTops = new Dictionary<Texture, float>();
+        private static readonly Dictionary<Texture, float> opaqueBottoms = new Dictionary<Texture, float>();
         private static readonly List<PawnRenderNode> tailNodes = new List<PawnRenderNode>();
         private static readonly List<PawnRenderNode> faceKeyNodes = new List<PawnRenderNode>();
         private static readonly Dictionary<Texture, Color32[]> pixelCache = new Dictionary<Texture, Color32[]>();
@@ -285,8 +295,14 @@ namespace NiceHealthTabPatch
                 hairMaterial = hairMaterial ?? (Material)hairMaterialField.GetValue(null);
                 float shrink = TailLength * (info.chin - info.feet) / info.tailHeight;
                 Rect r = new Rect(info.bodyCenter + (info.texRect.position - info.bodyCenter) * shrink, info.texRect.size * shrink);
-                var screen = new Rect(overlayRect.center.x + (r.xMin - info.centerX) * scale, chinY + (info.chin - r.yMax) * scale,
-                    r.width * scale, r.height * scale);
+                float top = chinY + (info.chin - r.yMax) * scale;
+                float? hipY = HipY(doll, dollRect);
+                if (hipY.HasValue)
+                {
+                    float tailTop = info.bodyCenter.y + (info.tailTop - info.bodyCenter.y) * shrink;
+                    top = hipY.Value - (r.yMax - tailTop) * scale;
+                }
+                var screen = new Rect(overlayRect.center.x + (r.xMin - info.centerX) * scale, top, r.width * scale, r.height * scale);
                 drawHairClipped(ctx, screen, info.tex, hairMaterial, Color.white);
             }
             catch (Exception e)
@@ -420,10 +436,74 @@ namespace NiceHealthTabPatch
             if (!tailBounds.HasValue || tailBounds.Value.height <= 0.01f)
                 return null;
             info.tailHeight = tailBounds.Value.height;
+            info.tailTop = tailBounds.Value.yMax;
             info.texRect = texRect.Value;
             layers.Sort((a, b) => a.layer.CompareTo(b.layer));
             info.tex = Composite(layers, r => r, info.texRect);
             return info;
+        }
+
+        /// <summary>
+        /// The doll's hips on screen: halfway between the top of its leg parts and its crotch (the
+        /// bottom of its torso part); null without either.
+        /// </summary>
+        /// <remarks>
+        /// Nice Health Tab's leg parts start at the hip joint, hidden under the torso, so their top
+        /// alone is too high for a tail and the crotch too low.
+        /// </remarks>
+        private static float? HipY(Doll doll, Rect dollRect)
+        {
+            List<BodyPartRecord> humanParts = BodyDefOf.Human.AllParts;
+            float? legTop = null, crotch = null;
+            foreach (DollBodyPart part in doll.Parts)
+            {
+                if (part.bodyPartId < 0 || part.bodyPartId >= humanParts.Count || part.UsesAtlas || part.tex == null)
+                    continue;
+                BodyPartDef def = humanParts[part.bodyPartId].def;
+                if (def != BodyPartDefOf.Leg && def != BodyPartDefOf.Torso)
+                    continue;
+                Rect rect = part.GetRect(doll.BoundingBox, dollRect, Vector2.zero);
+                if (def == BodyPartDefOf.Torso)
+                {
+                    crotch = rect.yMin + OpaqueBottom(part.tex) * rect.height;
+                }
+                else
+                {
+                    float top = rect.yMin + OpaqueTop(part.tex) * rect.height;
+                    legTop = legTop.HasValue ? Mathf.Min(legTop.Value, top) : top;
+                }
+            }
+            return legTop.HasValue && crotch.HasValue ? (legTop.Value + crotch.Value) / 2f : (float?)null;
+        }
+
+        /// <summary>
+        /// The top of a texture's opaque pixels as a fraction from the top of its rect.
+        /// </summary>
+        private static float OpaqueTop(Texture2D tex)
+        {
+            if (!opaqueTops.TryGetValue(tex, out float top))
+            {
+                Rect? bounds = OpaqueBounds(tex, new Rect(0f, 0f, 1f, 1f));
+                pixelCache.Remove(tex);
+                top = bounds.HasValue ? 1f - bounds.Value.yMax : 0f;
+                opaqueTops[tex] = top;
+            }
+            return top;
+        }
+
+        /// <summary>
+        /// The bottom of a texture's opaque pixels as a fraction from the top of its rect.
+        /// </summary>
+        private static float OpaqueBottom(Texture2D tex)
+        {
+            if (!opaqueBottoms.TryGetValue(tex, out float bottom))
+            {
+                Rect? bounds = OpaqueBounds(tex, new Rect(0f, 0f, 1f, 1f));
+                pixelCache.Remove(tex);
+                bottom = bounds.HasValue ? 1f - bounds.Value.yMin : 1f;
+                opaqueBottoms[tex] = bottom;
+            }
+            return bottom;
         }
 
         /// <summary>
@@ -530,17 +610,31 @@ namespace NiceHealthTabPatch
         }
 
         /// <summary>
-        /// Collects the body's own HAR addons (not the head's) that have a graphic and pass their conditions.
+        /// Collects the body's own HAR addons (not the head's) that have a graphic and pass their
+        /// conditions as if the pawn were not drafted.
         /// </summary>
         private static void CollectDrawableBodyAddons(PawnRenderNode body, PawnRenderNode head, Pawn pawn, List<PawnRenderNode> result)
         {
-            foreach (PawnRenderNode child in body.children ?? Array.Empty<PawnRenderNode>())
+            // The field rather than the Drafted setter, which would end the pawn's jobs.
+            Pawn_DraftController drafter = pawn.drafter;
+            bool drafted = drafter != null && draftedField(drafter);
+            if (drafted)
+                draftedField(drafter) = false;
+            try
             {
-                if (child == head || !addonPropsType.IsInstanceOfType(child.Props) || child.GraphicFor(pawn) == null)
-                    continue;
-                canDrawArgs[0] = pawn;
-                if ((bool)canDrawAddonMethod.Invoke(addonField.GetValue(child.Props), canDrawArgs))
-                    result.Add(child);
+                foreach (PawnRenderNode child in body.children ?? Array.Empty<PawnRenderNode>())
+                {
+                    if (child == head || !addonPropsType.IsInstanceOfType(child.Props) || child.GraphicFor(pawn) == null)
+                        continue;
+                    canDrawArgs[0] = pawn;
+                    if ((bool)canDrawAddonMethod.Invoke(addonField.GetValue(child.Props), canDrawArgs))
+                        result.Add(child);
+                }
+            }
+            finally
+            {
+                if (drafted)
+                    draftedField(drafter) = true;
             }
         }
 

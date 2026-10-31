@@ -68,7 +68,7 @@ namespace NiceHealthTabPatch
         private static readonly PropertyInfo colorChannelProperty;
         private static readonly MethodInfo canDrawAddonMethod;
         private static readonly object[] canDrawArgs = new object[1];
-        private static readonly Type addonPropsType;
+        private static readonly Type addonPropsType;   // null without Humanoid Alien Races
         private static readonly Action<DollRenderContext, Rect, Texture2D, Material, Color> drawHairClipped;
         private static readonly FieldInfo hairMaterialField;
         private static readonly FieldInfo outlineMaterialField;
@@ -126,6 +126,20 @@ namespace NiceHealthTabPatch
         static AlienAddonOverlay()
         {
             addonPropsType = GenTypes.GetTypeInAnyAssembly(AddonPropsTypeName);
+            var harmony = new Harmony("ifchen0.nicehealthtabpatch");
+            try
+            {
+                // Also needed without Humanoid Alien Races, for the doll proportions.
+                harmony.Patch(AccessTools.Method(typeof(DollRenderer), nameof(DollRenderer.DrawDoll)),
+                    prefix: new HarmonyMethod(typeof(AlienAddonOverlay), nameof(DrawDollPrefix)),
+                    finalizer: new HarmonyMethod(typeof(AlienAddonOverlay), nameof(DrawDollFinalizer)));
+            }
+            catch (Exception e)
+            {
+                failed = true;
+                Log.Warning("[NiceHealthTabPatch] Nice Health Tab doll drawing not found; alien addon overlay and doll proportions skipped. " + e.Message);
+                return;
+            }
             if (addonPropsType == null)
                 return;
             try
@@ -139,17 +153,13 @@ namespace NiceHealthTabPatch
                 Type assets = AccessTools.TypeByName("NiceHealthTab.Assets");
                 hairMaterialField = AccessTools.Field(assets, "HairMaterial");
                 outlineMaterialField = AccessTools.Field(assets, "OutlineMaterial");
-                var harmony = new Harmony("ifchen0.nicehealthtabpatch");
                 harmony.Patch(AccessTools.Method(typeof(DollPartRenderer), "DrawHeadOverlay"),
                     postfix: new HarmonyMethod(typeof(AlienAddonOverlay), nameof(DrawHeadOverlayPostfix)));
-                harmony.Patch(AccessTools.Method(typeof(DollRenderer), nameof(DollRenderer.DrawDoll)),
-                    prefix: new HarmonyMethod(typeof(AlienAddonOverlay), nameof(DrawDollPrefix)),
-                    finalizer: new HarmonyMethod(typeof(AlienAddonOverlay), nameof(DrawDollFinalizer)));
             }
             catch (Exception e)
             {
-                failed = true;
-                Log.Warning("[NiceHealthTabPatch] Alien race addons or Nice Health Tab doll drawing not found; alien addon overlay skipped. " + e.Message);
+                addonPropsType = null;
+                Log.Warning("[NiceHealthTabPatch] Alien race addons or Nice Health Tab head overlay not found; alien addon overlay skipped. " + e.Message);
             }
         }
 
@@ -160,7 +170,8 @@ namespace NiceHealthTabPatch
             overlays.Clear();
             ClearTails();
             pixelCache.Clear();
-            overlayMemoPawn = tailMemoPawn = null;
+            overlayMemoPawn = tailMemoPawn = ratioMemoPawn = null;
+            headRatios.Clear();
         }
 
         private static void ClearTails()
@@ -255,19 +266,26 @@ namespace NiceHealthTabPatch
             public Texture2D head;
             public Doll doll;
             public Texture2D outline;
+            public DollProportions.Swap proportions;
         }
 
         private static void DrawDollPrefix(DollRenderContext ctx, Doll doll, Rect rect, out HeadSwap __state)
         {
             __state = default;
             Pawn pawn = ctx?.Pawn;
-            if (failed || pawn == null || !NiceHealthTabPatchMod.Settings.alienHeadOverlay
-                || !(doll is HumanlikeDoll humanlike) || humanlike.headPart == null || doll.outlineTex == null
-                || HasOwnDoll(doll, pawn))
+            if (failed || pawn == null || !(doll is HumanlikeDoll humanlike) || humanlike.headPart == null
+                || doll.outlineTex == null || HasOwnDoll(doll, pawn))
                 return;
+            bool overlay = addonPropsType != null && NiceHealthTabPatchMod.Settings.alienHeadOverlay;
             try
             {
-                SwapEarlessHead(pawn, humanlike, ref __state);
+                if (overlay)
+                    SwapEarlessHead(pawn, humanlike, ref __state);
+                // After the earless swap, so the outline it scales is the earless one.
+                if (NiceHealthTabPatchMod.Settings.dollProportions)
+                    __state.proportions = DollProportions.Apply(pawn, humanlike);
+                if (!overlay)
+                    return;
                 TailInfo info = TailFor(pawn);
                 if (info == null)
                     return;
@@ -316,6 +334,7 @@ namespace NiceHealthTabPatch
 
         private static void DrawDollFinalizer(HeadSwap __state)
         {
+            DollProportions.Restore(__state.proportions);
             if (__state.part != null)
                 __state.part.tex = __state.head;
             if (__state.doll != null)
@@ -549,7 +568,7 @@ namespace NiceHealthTabPatch
         /// </summary>
         private static void CollectAddons(PawnRenderNode node, Pawn pawn, string colorChannel, List<PawnRenderNode> result)
         {
-            if (node.children == null)
+            if (node.children == null || addonPropsType == null)
                 return;
             foreach (PawnRenderNode child in node.children)
             {
@@ -934,5 +953,146 @@ namespace NiceHealthTabPatch
 
         private static Rect Union(Rect a, Rect b) =>
             Rect.MinMaxRect(Mathf.Min(a.xMin, b.xMin), Mathf.Min(a.yMin, b.yMin), Mathf.Max(a.xMax, b.xMax), Mathf.Max(a.yMax, b.yMax));
+
+        private static readonly Dictionary<string, float?> headRatios = new Dictionary<string, float?>();
+        private static Pawn ratioMemoPawn;
+        private static int ratioMemoFrame = -1;
+        private static float? ratioMemo;
+
+        /// <summary>
+        /// The opaque width of the pawn's race head over its chin-to-feet span, south portrait; null
+        /// when the render tree or the body graphic gives nothing to measure.
+        /// </summary>
+        /// <remarks>
+        /// The width rather than the height: a race head drawn as face addons (Miho) leaves the top of
+        /// the skull to the hair, but the face still spans the head. Cached by race, life stage and
+        /// appearance.
+        /// </remarks>
+        internal static float? HeadRatio(Pawn pawn)
+        {
+            if (pawn != ratioMemoPawn || Time.frameCount != ratioMemoFrame)
+            {
+                ratioMemo = HeadRatioUncached(pawn);
+                ratioMemoPawn = pawn;
+                ratioMemoFrame = Time.frameCount;
+            }
+            return ratioMemo;
+        }
+
+        private static float? HeadRatioUncached(Pawn pawn)
+        {
+            ResetIfNewGame();
+            PawnRenderTree tree = pawn.Drawer?.renderer?.renderTree;
+            if (tree == null || !tree.Resolved
+                || !tree.TryGetNodeByTag(PawnRenderNodeTagDefOf.Body, out PawnRenderNode body)
+                || !tree.TryGetNodeByTag(PawnRenderNodeTagDefOf.Head, out PawnRenderNode head))
+                return null;
+            keyBuilder.Clear().Append(pawn.def.defName).Append('|').Append(pawn.ageTracker?.CurLifeStage?.defName)
+                .Append('|').Append(body.GraphicFor(pawn)?.path).Append('|').Append(head.GraphicFor(pawn)?.path);
+            faceKeyNodes.Clear();
+            CollectAddons(head, pawn, "skin", faceKeyNodes);
+            AppendGraphicPaths(faceKeyNodes, pawn);
+            AppendAppearance(pawn);
+            string key = keyBuilder.ToString();
+            if (headRatios.TryGetValue(key, out float? ratio))
+                return ratio;
+
+            ratio = null;
+            PawnDrawParms parms = SouthPortraitParms(pawn);
+            Layer bodyLayer = LayerFor(body, pawn, parms);
+            Layer headLayer = LayerFor(head, pawn, parms);
+            Rect? raceHead = RaceHeadBounds(pawn, head, parms, out _, out _, out _);
+            if (bodyLayer != null && headLayer != null && raceHead.HasValue)
+            {
+                bodyLayer.rect.center = Vector2.zero;
+                Rect? bodyBounds = OpaqueBounds(bodyLayer.tex, bodyLayer.rect);
+                float span = headLayer.rect.center.y + raceHead.Value.yMin - (bodyBounds?.yMin ?? 0f);
+                if (bodyBounds.HasValue && span > 0.01f)
+                    ratio = raceHead.Value.width / span;
+            }
+            pixelCache.Clear();
+            headRatios[key] = ratio;
+            return ratio;
+        }
+
+        // TEMP: proportion probe for the NiceHealthTabPatchTests mod, called by reflection. Not for release.
+        internal static string ProbePawnProportions(Pawn pawn)
+        {
+            PawnRenderTree tree = pawn.Drawer?.renderer?.renderTree;
+            if (tree == null || !tree.Resolved
+                || !tree.TryGetNodeByTag(PawnRenderNodeTagDefOf.Body, out PawnRenderNode body)
+                || !tree.TryGetNodeByTag(PawnRenderNodeTagDefOf.Head, out PawnRenderNode head))
+                return "no render tree";
+            try
+            {
+                PawnDrawParms parms = SouthPortraitParms(pawn);
+                Layer bodyLayer = LayerFor(body, pawn, parms);
+                Layer headLayer = LayerFor(head, pawn, parms);
+                Rect? raceHead = RaceHeadBounds(pawn, head, parms, out _, out _, out _);
+                if (bodyLayer == null || headLayer == null || !raceHead.HasValue)
+                    return $"missing layer (body {bodyLayer != null}, head {headLayer != null}, race head {raceHead.HasValue})";
+                float bodyMesh = bodyLayer.rect.width;
+                bodyLayer.rect.center = Vector2.zero;
+                Rect? bodyBounds = OpaqueBounds(bodyLayer.tex, bodyLayer.rect);
+                if (!bodyBounds.HasValue)
+                    return "blank body texture";
+                Vector2 headCenter = headLayer.rect.center;
+                float top = headCenter.y + raceHead.Value.yMax;
+                float chin = headCenter.y + raceHead.Value.yMin;
+                float feet = bodyBounds.Value.yMin;
+                return Ratios(top - chin, raceHead.Value.width, chin - feet, bodyBounds.Value.width)
+                    + $"\tmesh head {headLayer.rect.width:F3} body {bodyMesh:F3}";
+            }
+            finally
+            {
+                pixelCache.Clear();
+            }
+        }
+
+        // TEMP: the same numbers for the Nice Health Tab doll the pawn gets. Doll units are y down.
+        internal static string ProbeDollProportions(Pawn pawn)
+        {
+            // Nice Health Tab's own choice, so the kid doll fix is measured too.
+            string xenotype = AccessTools.Method(typeof(DollDrawer), "GetXenotype")?.Invoke(null, new object[] { pawn }) as string;
+            var doll = AccessTools.Method(typeof(DollRenderContext), "GetMainDoll")?.Invoke(null,
+                new object[] { pawn, xenotype, pawn.gender.ToString(), pawn.story?.bodyType?.defName ?? "*" }) as HumanlikeDoll;
+            string name;
+            if (doll?.headPart?.tex == null)
+                return "no humanlike doll";
+            name = doll.defName;
+            try
+            {
+                DollBodyPartDef headPart = doll.headPart;
+                Vector2 size = headPart.GetSourcePixelSize();
+                float w = Mathf.Abs(headPart.width) * size.x, h = Mathf.Abs(headPart.height) * size.y;
+                Rect? opaque = OpaqueBounds(headPart.tex, new Rect(0f, 0f, w, h));
+                if (!opaque.HasValue)
+                    return name + "\tblank head";
+                float rectTop = headPart.position.y - h / 2f;
+                float top = rectTop + (h - opaque.Value.yMax);
+                float chin = rectTop + (h - opaque.Value.yMin);
+                float feet = float.MinValue, left = float.MaxValue, right = float.MinValue;
+                foreach (DollBodyPart part in doll.Parts)
+                {
+                    Vector2 s = part.GetSourcePixelSize();
+                    float pw = Mathf.Abs(part.width) * s.x, ph = Mathf.Abs(part.height) * s.y;
+                    feet = Mathf.Max(feet, part.position.y + ph / 2f);
+                    if (part.position.y > chin)
+                    {
+                        left = Mathf.Min(left, part.position.x - pw / 2f);
+                        right = Mathf.Max(right, part.position.x + pw / 2f);
+                    }
+                }
+                return $"{name}\t" + Ratios(chin - top, opaque.Value.width, feet - chin, right - left)
+                    + $"\tbbox {doll.BoundingBox.yMin:F0}..{doll.BoundingBox.yMax:F0}";
+            }
+            finally
+            {
+                pixelCache.Clear();
+            }
+        }
+
+        private static string Ratios(float headH, float headW, float bodyH, float bodyW) =>
+            $"head {headH:F3} x {headW:F3}\tbody {bodyH:F3} x {bodyW:F3}\thead/body {headH / bodyH:F3}\thead/total {headH / (headH + bodyH):F3}";
     }
 }

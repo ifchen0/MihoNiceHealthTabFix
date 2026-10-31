@@ -11,10 +11,12 @@ namespace NiceHealthTabPatch
     public class NiceHealthTabPatchSettings : ModSettings
     {
         public bool alienHeadOverlay = true;
+        public bool dollProportions;
 
         public override void ExposeData()
         {
             Scribe_Values.Look(ref alienHeadOverlay, "alienHeadOverlay", true);
+            Scribe_Values.Look(ref dollProportions, "dollProportions", false);
         }
     }
 
@@ -90,6 +92,12 @@ namespace NiceHealthTabPatch
                     AlienAddonOverlay.ClearCache();
                     Settings.Write();
                 }
+                before = Settings.dollProportions;
+                list.CheckboxLabeled("(Experimental) Scale the doll head to the pawn's proportions",
+                    ref Settings.dollProportions,
+                    "Makes the doll head bigger or smaller to follow the pawn's head-to-body proportion, such as a child's bigger head or Miho's smaller one. The difference is toned down, since RimWorld pawns exaggerate it. Added by Nice Health Tab & Miho Fixes.");
+                if (before != Settings.dollProportions)
+                    Settings.Write();
             }
             listing.End();
         }

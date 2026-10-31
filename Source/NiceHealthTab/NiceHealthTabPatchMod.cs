@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using HarmonyLib;
 using NiceHealthTab;
+using RimWorld;
+using UnityEngine;
 using Verse;
 
 namespace NiceHealthTabPatch
@@ -23,6 +25,9 @@ namespace NiceHealthTabPatch
     /// The mod has no settings page of its own: the options are listed at the end of the Common tab
     /// of Nice Health Tab's settings, by replacing that tab's <see cref="Listing.End"/> call. They are
     /// saved as soon as they change, since closing that window only saves Nice Health Tab's settings.
+    /// The child age range slider is cut down to its lower end, the age below which the vanilla health
+    /// tab is used: its upper end picked the kid doll, which now follows the life stage
+    /// (<see cref="KidDollByLifeStage"/>).
     /// </remarks>
     [StaticConstructorOnStartup]
     public class NiceHealthTabPatchMod : Mod
@@ -54,9 +59,21 @@ namespace NiceHealthTabPatch
             {
                 if (ins.Calls(end))
                     yield return new CodeInstruction(ins) { opcode = System.Reflection.Emit.OpCodes.Call, operand = AccessTools.Method(typeof(NiceHealthTabPatchMod), nameof(DrawOptionsAndEnd)) };
+                else if (ins.operand is System.Reflection.MethodInfo m && m.DeclaringType == typeof(Widgets) && m.Name == nameof(Widgets.FloatRange)
+                    && m.GetParameters().Length == 11)
+                    yield return new CodeInstruction(ins) { opcode = System.Reflection.Emit.OpCodes.Call, operand = AccessTools.Method(typeof(NiceHealthTabPatchMod), nameof(DrawChildAgeMin)) };
                 else
                     yield return ins;
             }
+        }
+
+        // Same parameters as the Widgets.FloatRange call it replaces; only the lower end stays.
+        private static void DrawChildAgeMin(Rect rect, int id, ref FloatRange range, float min, float max, string labelKey,
+            ToStringStyle valueStyle, float minimumRange, GameFont font, Color? color, float roundTo)
+        {
+            float age = range.min;
+            Widgets.HorizontalSlider(rect, ref age, new FloatRange(min, max), $"Vanilla health tab below age {age:F0}", 1f);
+            range.min = age;
         }
 
         private static void DrawOptionsAndEnd(Listing listing)

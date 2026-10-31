@@ -28,6 +28,10 @@ Small patches for [url=https://steamcommunity.com/sharedfiles/filedetails/?id=33
 
 [b]Fix:[/b] The gene parts are registered and the gene layers drawn again. The pigskin nose stays as it is, since 1.7 also dropped the code that swaps it in. Does nothing on 1.6 or once Nice Health Tab fixes it.
 
+[h2]Nice Health Tab: child doll on teenagers[/h2][b]Cause:[/b] Nice Health Tab gives its child doll to every pawn younger than 15, so 13 and 14 year olds, and races that grow up sooner (Weazel is an adult at 8), get a child doll on an adult body.
+
+[b]Fix:[/b] The child doll now follows the pawn's life stage: children and babies get it, adults do not. The child age range slider in Nice Health Tab's settings keeps only its lower end, the age below which the vanilla health tab is used, since the upper end no longer does anything.
+
 [h2]Miho: missile turret error on load[/h2][b]Cause:[/b] Miho's missile turret gun gets [i]CompEquippable[/i] twice (its own comps plus the inherited one), so loading a save logs [i]Exception registering Verse.Verb_Shoot ... An item with the same key has already been added[/i] once per missile turret.
 
 [b]Fix:[/b] An XML patch removes the extra copy. Existing saves load fine and are cleaned up the next time they are saved.

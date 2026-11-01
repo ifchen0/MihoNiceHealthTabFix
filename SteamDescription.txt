@@ -1,65 +1,32 @@
-Small patches for [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3328729902]Nice Health Tab[/url] and [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2816826107]Miho[/url]. Both are optional: the Nice Health Tab patches only load when Nice Health Tab is active, and the Miho patches only apply when Miho is loaded, so the Miho fixes also work without Nice Health Tab.
+Small fixes for [url=https://steamcommunity.com/sharedfiles/filedetails/?id=3328729902]Nice Health Tab[/url] and [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2816826107]Miho[/url]. Both are optional: each part only applies when its mod is loaded, so the Miho fixes also work without Nice Health Tab.
 
-[h2]Miho: operations list never settles[/h2][b]Cause:[/b] Miho gets the human surgeries twice: through Humanoid Alien Races' [i]humanRecipeImport[/i] and through its own [i]recipes[/i] list (23 duplicates in my game). Nice Health Tab's animated operations list keeps pulling the duplicate rows toward two positions, and the vanilla Add bill menu lists them twice.
+[h2]Nice Health Tab[/h2][list]
+[*][b]Prosthetic arm:[/b] the vanilla simple prosthetic arm is no longer drawn as wood.
+[*][b]Buttons:[/b] inactive buttons around the doll are no longer faded until hovered.
+[*][b]Missing small parts:[/b] a white cross beside the head, arm or leg shows a missing ear, jaw, tongue or limb bone; hover lists them, click opens their surgery menu.
+[*][b]Badly hurt parts:[/b] parts kept at 1 HP by mods such as [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2260055393]Just A Flesh Wound[/url] are no longer drawn as missing.
+[*][b]Part list:[/b] right-clicking a part in the list opens its surgery menu.
+[*][b]Alien hair, ears and tails (experimental):[/b] Humanoid Alien Races addons (Miho, Ratkin, Weazel...) are drawn on the doll. On by default; can be turned off in Nice Health Tab's settings (Common tab).
+[*][b]Gene parts on 1.7:[/b] gene doll parts such as the Yttakin tail show again.
+[*][b]Child doll:[/b] follows the pawn's life stage instead of age under 15, so teens and fast-growing races get the adult doll.
+[/list]
 
-[b]Fix:[/b] At startup the surgery list of every Miho race def is deduplicated, keeping the order. Only real duplicates are removed, so a Miho update cannot make surgeries disappear.
+[h2]Miho[/h2][list]
+[*][b]Operations list:[/b] removes the duplicate surgeries that make the list jitter and show twice in the Add bill menu.
+[*][b]Missile turret:[/b] fixes [i]Exception registering Verse.Verb_Shoot ... An item with the same key has already been added[/i] on load.
+[*][b]Guided missiles:[/b] a missile that rolled a hit explodes on its target instead of short of it.
+[*][b]Permits:[/b] removes the [i]Permit choice ready[/i] alert that can never be cleared.
+[*][b]Quests:[/b] fixes hospitality quest text shown as [i]ERR:[/i] when a Miho Satrap is the asker. Quests made before the fix stay broken.
+[/list]
 
-[h2]Nice Health Tab: prosthetic arm drawn as wood[/h2][b]Cause:[/b] Nice Health Tab draws the vanilla [i]SimpleProstheticArm[/i] (steel and components) with its wooden part image.
-
-[b]Fix:[/b] An XML patch removes that override, so the arm is drawn like the bionic arm.
-
-[h2]Nice Health Tab: buttons hard to see[/h2]The inactive buttons around the body doll were drawn at 25% opacity until hovered. They now always use their hover color; active buttons are unchanged.
-
-[h2]Nice Health Tab: missing ears, jaw and limb bones not shown on the doll[/h2][b]Cause:[/b] The doll only colors parts that have their own image, so a missing ear, jaw, tongue, humerus, radius, femur or tibia leaves the head, arm or leg looking intact.
-
-[b]Fix:[/b] A white cross is drawn beside the head, arm or leg when one of these parts is missing. Hovering it lists the missing parts; clicking it opens their surgery menu (for limb bones, the leg or shoulder menu).
-
-[h2]Nice Health Tab: badly hurt parts shown as missing[/h2][b]Cause:[/b] Nice Health Tab uses its own copy of the part health calculation, so mods that change part health are ignored. With [url=https://steamcommunity.com/sharedfiles/filedetails/?id=2260055393]Just A Flesh Wound[/url], a part kept at 1 HP is drawn as missing.
-
-[b]Fix:[/b] When Nice Health Tab gets 0 health for a part that is not actually removed, the game's own part health is used. Without such a mod nothing changes.
-
-[h2]Nice Health Tab: surgery menu from the part list[/h2]Right-clicking a body part in the list next to the doll opens the same surgery menu as clicking that part on the doll. The whole-body entry opens the whole-body surgeries.
-
-[h2]Nice Health Tab: alien race hair, ears and tail (experimental)[/h2][b]Cause:[/b] The doll only draws vanilla hair styles on its head. Ears, tails and non-vanilla hair that Humanoid Alien Races pawns wear as body addons (Miho, Ratkin, Weazel and so on) are missing.
-
-[b]Fix:[/b] Those addons are read from each pawn and drawn on the doll, recolored by health like vanilla hair: parts sticking out of the head outline (ears, horns) on the head, and parts sticking out of the body below the chin (tails) behind the body. Race art is drawn for its own (often chibi) body, so tails are resized to half the doll's height and put at the doll's hips, the same for every race and age; a drafted pawn shows its standing tail.Races that turn vanilla hair styles off (Miho) also get their addon hair; pawns with a vanilla style, bald included, keep Nice Health Tab's hair. When such ears are drawn, the doll head and outline drop their human ears, so the pawn does not show four ears. Races with their own Nice Health Tab doll are left alone. Parts are picked by shape only, so some races may look off; it is on by default and can be turned off at the end of the Common tab in Nice Health Tab's mod settings. Only in the default health tab view, not the legacy one.
-
-[h2]Nice Health Tab: gene parts missing on RimWorld 1.7[/h2][b]Cause:[/b] Nice Health Tab's RimWorld 1.7 build neither registers its gene doll parts nor draws its gene layers, so the Yttakin furry tail is missing on 1.7.
-
-[b]Fix:[/b] The gene parts are registered and the gene layers drawn again. The pigskin nose stays as it is, since 1.7 also dropped the code that swaps it in. Does nothing on 1.6 or once Nice Health Tab fixes it.
-
-[h2]Nice Health Tab: child doll on teenagers[/h2][b]Cause:[/b] Nice Health Tab gives its child doll to every pawn younger than 15, so 13 and 14 year olds, and races that grow up sooner (Weazel is an adult at 8), get a child doll on an adult body.
-
-[b]Fix:[/b] The child doll now follows the pawn's life stage: children and babies get it, adults do not. The child age range slider in Nice Health Tab's settings keeps only its lower end, the age below which the vanilla health tab is used, since the upper end no longer does anything.
-
-[h2]Miho: missile turret error on load[/h2][b]Cause:[/b] Miho's missile turret gun gets [i]CompEquippable[/i] twice (its own comps plus the inherited one), so loading a save logs [i]Exception registering Verse.Verb_Shoot ... An item with the same key has already been added[/i] once per missile turret.
-
-[b]Fix:[/b] An XML patch removes the extra copy. Existing saves load fine and are cleaned up the next time they are saved.
-
-[h2]Miho: guided missiles explode short of the target[/h2][b]Cause:[/b] Miho's guided missiles (missile turret and the mechs' plasma missiles) have a 2-cell proximity fuse and explode as soon as they get that close, even when their hit roll succeeded. The plasma missile then misses completely, and the regular missile only grazes the target.
-
-[b]Fix:[/b] A missile that rolled a hit now explodes on its target. Missiles that missed or lost track behave as before. Applies to both sides.
-
-[h2]Long range turret warning[/h2][b]Cause:[/b] Enemy AI avoids the area around player turrets (range plus 4 cells). For turrets beyond radius about 80, such as Miho's missile turret, the log shows [i]Not enough squares to get to radius 204. Max is 79.81228[/i] whenever that area is rebuilt.
-
-[b]Fix:[/b] Vanilla already falls back to the largest circle; the same value is now returned without the error. Works for any long range turret.
-
-[h2]Miho: permit choice that cannot be made[/h2][b]Cause:[/b] Miho's top patron title awards a permit point, but Miho has no permits, so [i]Permit choice ready[/i] shows forever with an empty permit list.
-
-[b]Fix:[/b] An XML patch sets that title's permit points to 0, only while no Miho permit exists.
-
-[h2]Miho: quest text shows ERR[/h2][b]Cause:[/b] No Miho pawn kind can hold the Satrap title. When a hospitality quest picks a Miho Satrap as the asker, the game falls back to a random pawn kind, generation fails and the quest has no asker, so its text shows [i]ERR:[/i] with raw tags.
-
-[b]Fix:[/b] An XML patch lets the Miho leader kind hold Satrap, only while no Miho kind does. Quests made before the fix stay broken.
-
-[h2]Favor cannot be spent at favor traders[/h2][b]Cause:[/b] Some traders, such as Miho's relic curators, take royal favor as currency, but vanilla shows 0 favor on the colony side and only handles favor going to the player, so you can sell to them but not buy.
-
-[b]Fix:[/b] The colony side shows the negotiator's favor with the trader's faction, buying removes the cost from it, and prices are rounded up to whole points. Choose the pawn holding the favor as the negotiator. Works for any favor trader.
+[h2]Any mod[/h2][list]
+[*][b]Long range turrets:[/b] fixes [i]Not enough squares to get to radius ... Max is 79.81228[/i].
+[*][b]Favor traders:[/b] you can buy from traders that take royal favor (such as Miho's relic curators), paid from the negotiator's favor.
+[/list]
 
 [h2]Notes[/h2][list]
-[*]Safe to add to or remove from an existing save. Nothing is saved.
-[*]Writes one line to the log for each Miho race def that had duplicates, e.g. [i][NiceHealthTabPatch] Removed 23 duplicate recipes from Alien_Miho.[/i]
-[*]Requires Harmony. Nice Health Tab and Miho are optional; load after them if you use them.
+[*]Safe to add to or remove from an existing save.
+[*]Requires Harmony. Load after Nice Health Tab and Miho if you use them.
 [/list]
 [hr][/hr]
 This mod was developed with the help of AI coding tools (Claude Code). Full source code is included in the Source folder and on [url=https://github.com/ifchen0/MihoNiceHealthTabFix]GitHub[/url] for review.

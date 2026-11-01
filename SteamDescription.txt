@@ -48,6 +48,10 @@ Small patches for [url=https://steamcommunity.com/sharedfiles/filedetails/?id=33
 
 [b]Fix:[/b] An XML patch sets that title's permit points to 0, only while no Miho permit exists.
 
+[h2]Miho: quest text shows ERR[/h2][b]Cause:[/b] No Miho pawn kind can hold the Satrap title. When a hospitality quest picks a Miho Satrap as the asker, the game falls back to a random pawn kind, generation fails and the quest has no asker, so its text shows [i]ERR:[/i] with raw tags.
+
+[b]Fix:[/b] An XML patch lets the Miho leader kind hold Satrap, only while no Miho kind does. Quests made before the fix stay broken.
+
 [h2]Favor cannot be spent at favor traders[/h2][b]Cause:[/b] Some traders, such as Miho's relic curators, take royal favor as currency, but vanilla shows 0 favor on the colony side and only handles favor going to the player, so you can sell to them but not buy.
 
 [b]Fix:[/b] The colony side shows the negotiator's favor with the trader's faction, buying removes the cost from it, and prices are rounded up to whole points. Choose the pawn holding the favor as the negotiator. Works for any favor trader.

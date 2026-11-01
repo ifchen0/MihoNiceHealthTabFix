@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Patch>
+  <!-- No Miho pawn kind can hold the Miho_Satrap title. When a hospitality quest picks a Satrap asker, vanilla falls back
+       to a random humanlike kind from every mod (e.g. a creepjoiner), generation fails, the asker is null and the quest
+       text shows "ERR:". Let the leader kind hold Satrap too; steps aside once any kind lists it. -->
+  <Operation Class="PatchOperationConditional" MayRequire="miho.fortifiedoutremer">
+    <xpath>Defs/PawnKindDef[titleRequired="Miho_Satrap" or titleSelectOne/li="Miho_Satrap"]</xpath>
+    <nomatch Class="PatchOperationConditional">
+      <xpath>Defs/PawnKindDef[defName="Miho_Leader"]/titleSelectOne</xpath>
+      <match Class="PatchOperationAdd">
+        <xpath>Defs/PawnKindDef[defName="Miho_Leader"]/titleSelectOne</xpath>
+        <value>
+          <li>Miho_Satrap</li>
+        </value>
+      </match>
+    </nomatch>
+  </Operation>
+</Patch>
